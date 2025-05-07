@@ -14,10 +14,9 @@ const OnlineAdsCard: FC = () => {
           <Image
             src="https://picsum.photos/1200/300"
             alt="Advertisement"
-            layout="fill"
-            objectFit="cover"
+            fill
             data-ai-hint="advertisement banner"
-            className="rounded-b-lg"
+            className="rounded-b-lg object-cover"
           />
         </div>
       </CardContent>
