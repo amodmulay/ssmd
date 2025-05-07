@@ -29,6 +29,7 @@ const MOCK_CRYPTO_DATA: CryptoData[] = [
   { id: 'ripple', symbol: 'xrp', name: 'Ripple', image: 'https://picsum.photos/32/32?random=3', current_price: 0.5, market_cap: 25000000000, market_cap_rank: 6, total_volume: 1000000000, price_change_percentage_24h: 2.1, price_change_percentage_ytd_in_currency: -10.0, last_updated: new Date().toISOString() },
   { id: 'litecoin', symbol: 'ltc', name: 'Litecoin', image: 'https://picsum.photos/32/32?random=4', current_price: 150, market_cap: 10000000000, market_cap_rank: 20, total_volume: 500000000, price_change_percentage_24h: 0.8, price_change_percentage_ytd_in_currency: 20.0, last_updated: new Date().toISOString() },
   { id: 'cardano', symbol: 'ada', name: 'Cardano', image: 'https://picsum.photos/32/32?random=5', current_price: 0.4, market_cap: 15000000000, market_cap_rank: 8, total_volume: 800000000, price_change_percentage_24h: -1.2, price_change_percentage_ytd_in_currency: 5.0, last_updated: new Date().toISOString() },
+  { id: 'solana', symbol: 'sol', name: 'Solana', image: 'https://picsum.photos/32/32?random=6', current_price: 150, market_cap: 70000000000, market_cap_rank: 5, total_volume: 3000000000, price_change_percentage_24h: 3.5, price_change_percentage_ytd_in_currency: 80.0, last_updated: new Date().toISOString() },
 ];
 
 
@@ -121,3 +122,4 @@ export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h
     return null;
   }
 }
+

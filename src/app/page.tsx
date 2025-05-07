@@ -40,7 +40,7 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-primary mb-4">Overview</h2>
         <ConsolidatedDataFeedCard
           title="Market Overview"
-          cryptoSymbols={['bitcoin', 'ethereum']}
+          cryptoSymbols={['bitcoin', 'ethereum', 'solana']}
           indexSymbols={['^GSPC', '^IXIC']} // S&P 500 and Nasdaq
           showYTD={showYTDGlobal}
         />
@@ -69,7 +69,7 @@ export default function Home() {
             title="Crypto Markets"
             iconName="Coins"
             marketType="crypto"
-            symbols={['bitcoin', 'ethereum', 'ripple', 'litecoin', 'cardano']}
+            symbols={['bitcoin', 'ethereum', 'solana']}
             showYTD={showYTDGlobal}
           />
           <MarketDataFeedCard
@@ -115,3 +115,4 @@ export default function Home() {
     </main>
   );
 }
+
