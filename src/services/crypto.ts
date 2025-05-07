@@ -1,122 +1,131 @@
 
 // src/services/crypto.ts
-import type { cache } from 'react';
-
 export interface CryptoData {
-  id: string;
-  symbol: string;
-  name: string;
-  image: string;
+  id: string; // Original passed symbol, e.g., "bitcoin"
+  symbol: string; // Base asset symbol, e.g., "btc"
+  name: string; // Display name, e.g., "Bitcoin"
   current_price: number;
-  market_cap: number;
-  market_cap_rank: number;
-  total_volume: number;
   price_change_percentage_24h: number;
-  price_change_percentage_7d_in_currency?: number;
-  price_change_percentage_30d_in_currency?: number;
-  price_change_percentage_1y_in_currency?: number;
-  price_change_percentage_ytd_in_currency?: number;
+  price_change_percentage_ytd_in_currency?: number; // Fallback to 24h if YTD not available
+  total_volume?: number; // Volume in quote currency (e.g., USDT)
   last_updated: string;
 }
 
-const API_BASE_URL = 'https://api.coingecko.com/api/v3'; 
-// const COINGECKO_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY; // Get key from .env
-const COINGECKO_API_KEY = 'CG-N8SDgJHJADDddJsfvomGJ1w7';
+const API_BASE_URL = 'https://api.binance.com/api/v3';
+// Binance public endpoints for ticker data generally do not require an API key but are rate-limited.
+// For higher rate limits, an API key can be used, but this example will use public access.
 
-const MOCK_CRYPTO_DATA: CryptoData[] = [
-  { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png?1696501400', current_price: 60000, market_cap: 1200000000000, market_cap_rank: 1, total_volume: 50000000000, price_change_percentage_24h: 1.5, price_change_percentage_ytd_in_currency: 50.0, last_updated: new Date().toISOString() },
-  { id: 'ethereum', symbol: 'eth', name: 'Ethereum', image: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png?1696501628', current_price: 3000, market_cap: 360000000000, market_cap_rank: 2, total_volume: 20000000000, price_change_percentage_24h: -0.5, price_change_percentage_ytd_in_currency: 30.0, last_updated: new Date().toISOString() },
-  { id: 'ripple', symbol: 'xrp', name: 'Ripple', image: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-gradient--black-background.png?1696501943', current_price: 0.5, market_cap: 25000000000, market_cap_rank: 6, total_volume: 1000000000, price_change_percentage_24h: 2.1, price_change_percentage_ytd_in_currency: -10.0, last_updated: new Date().toISOString() },
-  { id: 'litecoin', symbol: 'ltc', name: 'Litecoin', image: 'https://assets.coingecko.com/coins/images/2/large/litecoin.png?1696501409', current_price: 150, market_cap: 10000000000, market_cap_rank: 20, total_volume: 500000000, price_change_percentage_24h: 0.8, price_change_percentage_ytd_in_currency: 20.0, last_updated: new Date().toISOString() },
-  { id: 'cardano', symbol: 'ada', name: 'Cardano', image: 'https://assets.coingecko.com/coins/images/975/large/cardano.png?1696502090', current_price: 0.4, market_cap: 15000000000, market_cap_rank: 8, total_volume: 800000000, price_change_percentage_24h: -1.2, price_change_percentage_ytd_in_currency: 5.0, last_updated: new Date().toISOString() },
-  { id: 'solana', symbol: 'sol', name: 'Solana', image: 'https://assets.coingecko.com/coins/images/4128/large/solana.png?1696504756', current_price: 150, market_cap: 70000000000, market_cap_rank: 5, total_volume: 3000000000, price_change_percentage_24h: 3.5, price_change_percentage_ytd_in_currency: 80.0, last_updated: new Date().toISOString() },
-];
+const symbolMap: { [key: string]: { binanceSymbol: string, displayName: string, baseAsset: string } } = {
+  'bitcoin': { binanceSymbol: 'BTCUSDT', displayName: 'Bitcoin', baseAsset: 'btc' },
+  'ethereum': { binanceSymbol: 'ETHUSDT', displayName: 'Ethereum', baseAsset: 'eth' },
+  'solana': { binanceSymbol: 'SOLUSDT', displayName: 'Solana', baseAsset: 'sol' },
+  // Add other mappings as needed
+};
+
+const MOCK_CRYPTO_DATA_TEMPLATE: Omit<CryptoData, 'id' | 'symbol' | 'name' | 'last_updated' | 'current_price' | 'price_change_percentage_24h' | 'price_change_percentage_ytd_in_currency' | 'total_volume'> = {
+  // Common structure, specific values will be overridden
+};
+
+const generateMockCryptoData = (mappedInfo: { binanceSymbol: string, displayName: string, baseAsset: string }, passedSymbol: string): CryptoData => {
+  const basePrice = mappedInfo.binanceSymbol === 'BTCUSDT' ? 60000 : mappedInfo.binanceSymbol === 'ETHUSDT' ? 3000 : 150;
+  const priceFluctuation = (Math.random() * (basePrice * 0.02)) - (basePrice * 0.01); // +/- 1%
+  const changeFluctuation = Math.random() * 1 - 0.5; // +/- 0.5%
+
+  return {
+    ...MOCK_CRYPTO_DATA_TEMPLATE,
+    id: passedSymbol,
+    symbol: mappedInfo.baseAsset,
+    name: mappedInfo.displayName,
+    current_price: parseFloat((basePrice + priceFluctuation).toFixed(2)),
+    price_change_percentage_24h: parseFloat((mappedInfo.binanceSymbol === 'BTCUSDT' ? 1.5 : mappedInfo.binanceSymbol === 'ETHUSDT' ? -0.5 : 3.5 + changeFluctuation).toFixed(2)),
+    price_change_percentage_ytd_in_currency: parseFloat((mappedInfo.binanceSymbol === 'BTCUSDT' ? 50.0 : mappedInfo.binanceSymbol === 'ETHUSDT' ? 30.0 : 80.0 + changeFluctuation * 10).toFixed(2)),
+    total_volume: parseFloat(((mappedInfo.binanceSymbol === 'BTCUSDT' ? 50e9 : mappedInfo.binanceSymbol === 'ETHUSDT' ? 20e9 : 3e9) * (1 + Math.random() * 0.1 - 0.05)).toFixed(0)),
+    last_updated: new Date().toISOString(),
+  };
+};
+
 
 // In-memory cache for API responses
 const responseCache = new Map<string, { data: CryptoData | null, timestamp: number }>();
-const CACHE_DURATION_WITH_KEY = 60 * 1000; // 1 minute with API key
-const CACHE_DURATION_DEMO = 15 * 60 * 1000; // 15 minutes for demo/mock
+const CACHE_DURATION_LIVE = 60 * 1000; // 1 minute for live data
+const CACHE_DURATION_MOCK_OR_DEMO = 15 * 60 * 1000; // 15 minutes for mock/demo
 
-function getMockCryptoData(symbol: string, period: '24h' | 'ytd', cacheKey: string): CryptoData | null {
-  console.warn(`Using mock crypto data for ${symbol} (${period}).`);
-  const baseMockData = MOCK_CRYPTO_DATA.find(c => c.id.toLowerCase() === symbol.toLowerCase() || c.symbol.toLowerCase() === symbol.toLowerCase());
-  if (baseMockData) {
-    const priceFluctuation = (Math.random() * (baseMockData.current_price * 0.02)) - (baseMockData.current_price * 0.01); // +/- 1%
-    const changeFluctuation = Math.random() * 1 - 0.5; // +/- 0.5%
-
-    const ytdChange = (baseMockData.price_change_percentage_ytd_in_currency ?? (Math.random() * 100 - 50)) + changeFluctuation;
-    const dailyChange = baseMockData.price_change_percentage_24h + changeFluctuation;
-
-    const dataToReturn: CryptoData = {
-      ...baseMockData,
-      current_price: parseFloat((baseMockData.current_price + priceFluctuation).toFixed(Math.max(2, (baseMockData.current_price < 1 ? 8 : 2)))),
-      price_change_percentage_24h: period === 'ytd' ? ytdChange : dailyChange,
-      price_change_percentage_ytd_in_currency: ytdChange,
-      last_updated: new Date().toISOString(),
-    };
-    responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
-    return dataToReturn;
+function getMockData(passedSymbol: string, period: '24h' | 'ytd', cacheKey: string): CryptoData | null {
+  console.warn(`Using mock crypto data for ${passedSymbol} (${period}) from Binance structure.`);
+  const mappedInfo = symbolMap[passedSymbol.toLowerCase()];
+  if (!mappedInfo) {
+    console.warn(`No mapping found for symbol: ${passedSymbol}. Cannot provide mock data.`);
+    responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
+    return null;
   }
-  return null;
+  
+  const mockData = generateMockCryptoData(mappedInfo, passedSymbol);
+  if (period === 'ytd' && mockData.price_change_percentage_ytd_in_currency === undefined) {
+     // If YTD is specifically requested and not available, use 24h as fallback for display consistency
+     mockData.price_change_percentage_24h = mockData.price_change_percentage_ytd_in_currency ?? mockData.price_change_percentage_24h;
+  }
+
+  responseCache.set(cacheKey, { data: mockData, timestamp: Date.now() });
+  return mockData;
 }
 
-export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h', forceMock: boolean = false): Promise<CryptoData | null> {
-  const cacheKey = `${symbol}-${period}-${forceMock ? 'mock' : (COINGECKO_API_KEY ? 'live' : 'demo')}`;
+export async function getCryptoData(passedSymbol: string, period: '24h' | 'ytd' = '24h', forceMock: boolean = false): Promise<CryptoData | null> {
+  const cacheKey = `binance-${passedSymbol}-${period}-${forceMock ? 'mock' : 'live'}`;
   const cachedEntry = responseCache.get(cacheKey);
-  const currentCacheDuration = forceMock ? CACHE_DURATION_DEMO : (COINGECKO_API_KEY ? CACHE_DURATION_WITH_KEY : CACHE_DURATION_DEMO);
-
+  const currentCacheDuration = forceMock ? CACHE_DURATION_MOCK_OR_DEMO : CACHE_DURATION_LIVE;
 
   if (cachedEntry && (Date.now() - cachedEntry.timestamp < currentCacheDuration)) {
     return cachedEntry.data;
   }
 
-  if (forceMock || !COINGECKO_API_KEY) {
-    // Use mock data if forced or if API key is not available
-    return getMockCryptoData(symbol, period, cacheKey);
+  const mappedInfo = symbolMap[passedSymbol.toLowerCase()];
+  if (!mappedInfo) {
+    console.warn(`No Binance mapping for symbol: ${passedSymbol}.`);
+    return getMockData(passedSymbol, period, cacheKey); // Attempt mock for unknown, or return null based on getMockData logic
   }
 
-  const priceChangePercentages = '24h,7d,14d,30d,60d,200d,1y';
-  const url = `${API_BASE_URL}/coins/markets?vs_currency=usd&ids=${symbol}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=${priceChangePercentages}&x_cg_demo_api_key=${COINGECKO_API_KEY}`;
+  if (forceMock) {
+    return getMockData(passedSymbol, period, cacheKey);
+  }
+
+  const url = `${API_BASE_URL}/ticker/24hr?symbol=${mappedInfo.binanceSymbol}`;
   
   try {
-    console.log(`Fetching crypto data for ${symbol} from CoinGecko Pro API`);
+    console.log(`Fetching crypto data for ${mappedInfo.binanceSymbol} (mapped from ${passedSymbol}) from Binance API`);
     const response = await fetch(url);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${symbol}` }));
-      console.warn(`CoinGecko API error for ${symbol}: ${response.status} ${response.statusText}`, errorData, "Using mock data as fallback.");
-      const mockResult = getMockCryptoData(symbol, period, cacheKey); // Use a different cache key for this fallback if needed or ensure it's handled.
-      if (mockResult === null) {
-          responseCache.set(cacheKey, { data: null, timestamp: Date.now() }); 
-      }
-      return mockResult;
+      const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${mappedInfo.binanceSymbol}` }));
+      console.warn(`Binance API error for ${mappedInfo.binanceSymbol}: ${response.status} ${response.statusText}`, errorData, "Using mock data as fallback.");
+      return getMockData(passedSymbol, period, cacheKey);
     }
-    const data: CryptoData[] = await response.json();
-    if (data && data.length > 0) {
-      const coinData = data[0];
-      const processedData = {
-        ...coinData,
-        // Ensure price_change_percentage_24h is always present
-        price_change_percentage_24h: coinData.price_change_percentage_24h !== undefined && coinData.price_change_percentage_24h !== null 
-                                      ? coinData.price_change_percentage_24h 
-                                      : 0, // Default to 0 if undefined or null
-        // price_change_percentage_ytd_in_currency will be used by component if present
+    
+    const data = await response.json();
+
+    if (data && data.symbol) {
+      const currentPrice = parseFloat(data.lastPrice);
+      const priceChangePercent24h = parseFloat(data.priceChangePercent);
+      // Binance 24hr ticker doesn't provide YTD directly. We'll use 24h for YTD if period is 'ytd'.
+      // Or, for a more accurate YTD, historical data would be needed, which is a larger change.
+      const ytdChange = priceChangePercent24h; // Fallback YTD to 24h change
+
+      const processedData: CryptoData = {
+        id: passedSymbol, // Use the original passed symbol (e.g., "bitcoin")
+        symbol: mappedInfo.baseAsset, // e.g., "btc"
+        name: mappedInfo.displayName, // e.g., "Bitcoin"
+        current_price: currentPrice,
+        price_change_percentage_24h: priceChangePercent24h,
+        price_change_percentage_ytd_in_currency: period === 'ytd' ? ytdChange : priceChangePercent24h, // Use 24h as YTD placeholder
+        total_volume: data.quoteVolume ? parseFloat(data.quoteVolume) : undefined,
+        last_updated: new Date(data.closeTime || Date.now()).toISOString(),
       };
       responseCache.set(cacheKey, { data: processedData, timestamp: Date.now() });
       return processedData;
     }
-    console.warn(`No data from CoinGecko API for ${symbol}. Using mock data as fallback.`);
-    const mockResultOnApiEmpty = getMockCryptoData(symbol, period, cacheKey);
-    if (mockResultOnApiEmpty === null) {
-        responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
-    }
-    return mockResultOnApiEmpty;
+    console.warn(`No data or unexpected format from Binance API for ${mappedInfo.binanceSymbol}. Using mock data as fallback.`);
+    return getMockData(passedSymbol, period, cacheKey);
   } catch (error) {
-    console.error(`Network or parsing error fetching crypto data for ${symbol}:`, error, "Using mock data as fallback.");
-    const mockResultOnCatch = getMockCryptoData(symbol, period, cacheKey);
-    if (mockResultOnCatch === null) {
-        responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
-    }
-    return mockResultOnCatch;
+    console.error(`Network or parsing error fetching crypto data for ${mappedInfo.binanceSymbol} from Binance:`, error, "Using mock data as fallback.");
+    return getMockData(passedSymbol, period, cacheKey);
   }
 }
