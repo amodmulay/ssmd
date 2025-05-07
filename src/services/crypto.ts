@@ -39,8 +39,8 @@ export async function getCryptoData(symbol: string): Promise<CryptoData> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error(`CoinGecko API error for ${symbol}: ${response.status}`, errorData);
+      const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${symbol}` }));
+      console.error(`CoinGecko API error for ${symbol}: ${response.status} ${response.statusText}`, errorData);
       throw new Error(`Failed to fetch crypto data for ${symbol}: ${response.statusText}`);
     }
     const data = await response.json();
@@ -50,8 +50,16 @@ export async function getCryptoData(symbol: string): Promise<CryptoData> {
       throw new Error(`Unexpected data format for ${symbol}`);
     }
 
-    const price = data[coinId].usd;
-    const priceChange24hPercent = data[coinId].usd_24h_change;
+    const rawPrice = data[coinId].usd;
+    const rawPriceChange24hPercent = data[coinId].usd_24h_change;
+
+    if (typeof rawPrice !== 'number' || typeof rawPriceChange24hPercent !== 'number') {
+      console.error(`Invalid data types from CoinGecko for ${symbol}: price is ${typeof rawPrice}, 24h_change is ${typeof rawPriceChange24hPercent}. Data:`, data[coinId]);
+      throw new Error(`Invalid data types received for ${symbol} from API.`);
+    }
+    
+    const price = rawPrice;
+    const priceChange24hPercent = rawPriceChange24hPercent;
     // Calculate absolute change: currentPrice * (percentageChange / 100)
     const priceChange24hAbsolute = price * (priceChange24hPercent / 100);
     
@@ -61,8 +69,12 @@ export async function getCryptoData(symbol: string): Promise<CryptoData> {
       priceChange24h: priceChange24hAbsolute,
     };
   } catch (error) {
-    console.error(`Error fetching crypto data for ${symbol}:`, error);
+    // Log the error if it's not one we've already constructed with a clear message
+    if (!(error instanceof Error && error.message.startsWith('Failed to fetch crypto data') || error.message.startsWith('Unexpected data format') || error.message.startsWith('Invalid data types received'))) {
+      console.error(`Generic error fetching crypto data for ${symbol}:`, error);
+    }
     // Re-throw or return a specific error structure if components need to handle it differently
     throw error; 
   }
 }
+
