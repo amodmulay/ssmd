@@ -66,8 +66,8 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
     const changes = data.map(item => 
         'price_change_percentage_24h' in item 
             ? (showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h)
-            : item.changesPercentage
-    ).filter(change => change !== undefined) as number[];
+            : (showYTD ? (item.ytdChangePercentage ?? item.changesPercentage) : item.changesPercentage)
+    ).filter(change => typeof change === 'number') as number[];
     
     if (changes.length === 0) return 'neutral';
     const averageChange = changes.reduce((acc, curr) => acc + curr, 0) / changes.length;
@@ -93,11 +93,14 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
       </CardHeader>
       <CardContent>
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="p-3 bg-background/50 rounded-md">
-                <Skeleton className="h-5 w-24 mb-1" />
-                <Skeleton className="h-4 w-16" />
+              <div key={i} className="p-2 bg-card rounded-lg shadow-md border border-border/50 min-h-[90px] flex flex-col justify-between">
+                <div>
+                  <Skeleton className="h-4 w-20 mb-1" /> {/* For name + icon */}
+                  <Skeleton className="h-5 w-24 mb-1" /> {/* For price */}
+                </div>
+                <Skeleton className="h-4 w-16 self-start mt-1" /> {/* For change % */}
               </div>
             ))}
           </div>
@@ -117,24 +120,39 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
           </Alert>
         )}
         {!loading && !error && data.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {data.map((item) => {
               const name = 'name' in item ? item.name : item.symbol;
-              const priceChange = 'price_change_percentage_24h' in item
-                                    ? (showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h)
-                                    : item.changesPercentage;
               const isCrypto = 'current_price' in item;
+              const currentPrice = isCrypto ? (item as CryptoData).current_price : (item as ForexData).price;
+              
+              const priceChange = isCrypto
+                                    ? (showYTD ? ((item as CryptoData).price_change_percentage_ytd_in_currency ?? (item as CryptoData).price_change_percentage_24h) : (item as CryptoData).price_change_percentage_24h)
+                                    : (showYTD ? ((item as ForexData).ytdChangePercentage ?? (item as ForexData).changesPercentage) : (item as ForexData).changesPercentage);
+
               const ItemIcon = isCrypto ? Coins : Landmark;
-              const changeColor = priceChange > 0 ? 'text-green-500' : priceChange < 0 ? 'text-red-500' : 'text-muted-foreground';
+              const changeColor = typeof priceChange === 'number' && priceChange > 0 ? 'text-green-500' : typeof priceChange === 'number' && priceChange < 0 ? 'text-red-500' : 'text-muted-foreground';
+
+              const formattedPrice = currentPrice !== undefined
+                ? `$${currentPrice.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: isCrypto ? 8 : 4,
+                  })}`
+                : 'N/A';
 
               return (
-                <div key={name} className="p-3 bg-secondary/30 rounded-lg shadow hover:shadow-md transition-shadow">
-                  <div className="flex items-center text-sm font-medium text-foreground mb-1">
-                    <ItemIcon className="h-4 w-4 mr-1.5 text-primary/80" />
-                     {name.length > 8 ? name.substring(0,8) + "..." : name}
+                <div key={name} className="p-2 bg-card rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col justify-between min-h-[90px] border border-border/50">
+                  <div>
+                    <div className="flex items-center text-xs font-medium text-muted-foreground mb-0.5 truncate">
+                      <ItemIcon className="h-3.5 w-3.5 mr-1.5 text-primary/80 shrink-0" />
+                      <span className="truncate" title={name}>{name}</span>
+                    </div>
+                    <div className="text-base font-semibold text-foreground truncate" title={formattedPrice}>
+                      {formattedPrice}
+                    </div>
                   </div>
-                  <div className={`text-lg font-semibold ${changeColor}`}>
-                    {priceChange !== undefined ? `${priceChange.toFixed(2)}%` : 'N/A'}
+                  <div className={`text-sm font-medium ${changeColor} mt-1 self-start`}>
+                    {typeof priceChange === 'number' ? `${priceChange.toFixed(2)}%` : 'N/A'}
                   </div>
                 </div>
               );
