@@ -30,7 +30,7 @@ const MOCK_CRYPTO_DATA: CryptoData[] = [
 ];
 
 // In-memory cache for API responses
-const responseCache = new Map<string, { data: CryptoData, timestamp: number }>();
+const responseCache = new Map<string, { data: CryptoData | null, timestamp: number }>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes cache for API and mock data
 
 function getMockCryptoData(symbol: string, period: '24h' | 'ytd', cacheKey: string): CryptoData | null {
@@ -54,6 +54,7 @@ function getMockCryptoData(symbol: string, period: '24h' | 'ytd', cacheKey: stri
     responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
     return dataToReturn;
   }
+  // Do not cache null here, let getCryptoData handle caching null if mock data is not found after an API failure.
   return null;
 }
 
@@ -62,11 +63,9 @@ export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h
   const cachedEntry = responseCache.get(cacheKey);
 
   if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_DURATION)) {
-    return cachedEntry.data;
+    return cachedEntry.data; // This can be CryptoData or null
   }
 
-  // Public API URL - no API key parameter needed for basic market data
-  // Requesting a broader set of price change percentages; API will return what's available for free tier
   const priceChangePercentages = '24h,7d,14d,30d,60d,200d,1y';
   const url = `${API_BASE_URL}/coins/markets?vs_currency=usd&ids=${symbol}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=${priceChangePercentages}`;
   
@@ -76,26 +75,37 @@ export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${symbol}` }));
       console.warn(`CoinGecko API error for ${symbol}: ${response.status} ${response.statusText}`, errorData, "Using mock data as fallback.");
-      return getMockCryptoData(symbol, period, cacheKey);
+      const mockResult = getMockCryptoData(symbol, period, cacheKey);
+      if (mockResult === null) { // If mock also fails (symbol not in mock or other mock issue)
+          responseCache.set(cacheKey, { data: null, timestamp: Date.now() }); // Cache the null failure
+      }
+      return mockResult;
     }
     const data: CryptoData[] = await response.json();
     if (data && data.length > 0) {
       const coinData = data[0];
-      // The YTD field might be `price_change_percentage_ytd_in_currency` if available, or we use 24h as fallback for display if needed.
-      // The component logic already handles displaying appropriate change based on 'showYTD' toggle.
-      // Here we just ensure the 24h field is always present.
       const processedData = {
         ...coinData,
-        price_change_percentage_24h: coinData.price_change_percentage_24h, // Ensure this is the actual 24h
+        price_change_percentage_24h: coinData.price_change_percentage_24h,
          // price_change_percentage_ytd_in_currency will be used by component if present
       };
       responseCache.set(cacheKey, { data: processedData, timestamp: Date.now() });
       return processedData;
     }
     console.warn(`No data from CoinGecko API for ${symbol}. Using mock data as fallback.`);
-    return getMockCryptoData(symbol, period, cacheKey);
+    // If API returns empty array or invalid data
+    const mockResultOnApiEmpty = getMockCryptoData(symbol, period, cacheKey);
+    if (mockResultOnApiEmpty === null) {
+        responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
+    }
+    return mockResultOnApiEmpty;
   } catch (error) {
     console.error(`Network or parsing error fetching crypto data for ${symbol}:`, error, "Using mock data as fallback.");
-    return getMockCryptoData(symbol, period, cacheKey);
+    const mockResultOnCatch = getMockCryptoData(symbol, period, cacheKey);
+    if (mockResultOnCatch === null) {
+        responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
+    }
+    return mockResultOnCatch;
   }
 }
+
