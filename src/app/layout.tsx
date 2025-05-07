@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ssmd: Super simple market dashboard',
-  description: 'Simplified market data dashboard',
+  title: 'Firebase Studio',
+  description: 'A NextJS starter in Firebase Studio.',
 };
 
 export default function RootLayout({
@@ -33,4 +33,3 @@ export default function RootLayout({
     </html>
   );
 }
-
