@@ -40,8 +40,8 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-primary mb-4">Overview</h2>
         <ConsolidatedDataFeedCard
           title="Market Overview"
-          cryptoSymbols={['bitcoin', 'ethereum', 'solana']}
-          indexSymbols={['^GSPC', '^IXIC']} // S&P 500 and Nasdaq
+          cryptoSymbols={['bitcoin', 'ethereum']} // Removed 'solana'
+          indexSymbols={['^GSPC', '^IXIC', '^GDAXI', '^N225', '^HSI', '^NSEI']} // S&P 500, Nasdaq, DAX, Nikkei, Hang Seng, Nifty
           showYTD={showYTDGlobal}
         />
       </section>
