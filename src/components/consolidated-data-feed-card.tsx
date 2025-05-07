@@ -34,7 +34,11 @@ const initialItems: { id: string; label: string; type: 'crypto' | 'market' | 'bo
   { id: 'us10yr', label: 'US 10Y Bond', type: 'bond', symbol: 'US 10-Year Treasury' },
 ];
 
-const ConsolidatedDataFeedCard: React.FC = () => {
+interface ConsolidatedDataFeedCardProps {
+  onError?: () => void;
+}
+
+const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onError }) => {
   const [data, setData] = useState<ConsolidatedDataItem[]>(initialItems.map(item => ({ ...item, data: null })));
   const [isLoading, setIsLoading] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,7 @@ const ConsolidatedDataFeedCard: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    let anErrorOccurred = false;
     try {
       const promises = initialItems.map(async (itemConfig) => {
         let itemData: CryptoData | MarketData | BondRateData | null = null;
@@ -57,17 +62,22 @@ const ConsolidatedDataFeedCard: React.FC = () => {
         } catch (e) {
           console.error(`Error fetching data for ${itemConfig.label}:`, e);
           error = true;
+          anErrorOccurred = true;
         }
         return { ...itemConfig, data: itemData, error };
       });
       const results = await Promise.all(promises);
       setData(results);
+      if (anErrorOccurred) {
+        onError?.();
+      }
     } catch (error) {
       console.error('Error fetching consolidated data:', error);
+      onError?.();
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [onError]);
 
   useEffect(() => {
     fetchData();

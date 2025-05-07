@@ -1,6 +1,8 @@
+
 "use client";
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';import { useState } from 'react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useState } from 'react';
 import MarketDataFeedCard from '@/components/market-data-feed-card';
 import ConsolidatedDataFeedCard from '@/components/consolidated-data-feed-card';
 import { Info } from 'lucide-react';
@@ -11,7 +13,7 @@ export default function Home() {
   const usMarketSymbols = ['S&P 500', 'NASDAQ'];
   const euMarketSymbols = ['FTSE 100', 'DAX', 'CAC 40']; // Example EU markets
   const asiaMarketSymbols = ['Nikkei 225', 'Hang Seng', 'Shanghai Composite', 'Nifty 50']; // Example Asia markets
-    const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const handleError = () => {
     setHasError(true);
@@ -24,22 +26,19 @@ export default function Home() {
           <Info className="h-4 w-4 mr-2" />
           <AlertTitle>Data Source Notice</AlertTitle>
           <AlertDescription>
-            If market data is not loading, it may be blocked by network rules.
-            Please check your network settings.
+            If market data is not loading, it may be due to network issues or API rate limits.
+            Please check your internet connection and try again later. Some ad blockers might also interfere.
           </AlertDescription>
         </Alert>
       )}
       
-
-
-
       <header className="mb-8">
-        <h1 className="text-4xl font-bold text-primary tracking-tight">SSMD</h1>
-        <p className="text-lg text-muted-foreground">Super simple market dashboard</p>
+        <h1 className="text-4xl font-bold text-primary tracking-tight">MarketWatch Lite</h1>
+        <p className="text-lg text-muted-foreground">Your simplified market data dashboard</p>
       </header>
 
       <main className="space-y-8">
-        <ConsolidatedDataFeedCard />
+        <ConsolidatedDataFeedCard onError={handleError} />
         
         <OnlineAdsCard />
 
@@ -80,7 +79,7 @@ export default function Home() {
     </main>
 
       <footer className="mt-12 pt-8 border-t border-border text-center text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} ssmd. Data is for informational purposes only.</p>
+        <p>&copy; {new Date().getFullYear()} MarketWatch Lite. Data is for informational purposes only.</p>
       </footer>
     </div>
   );

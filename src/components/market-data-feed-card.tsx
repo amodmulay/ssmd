@@ -16,6 +16,7 @@ interface MarketDataFeedCardProps {
   marketType: MarketType;
   symbols: string[];
   className?: string;
+  onError?: () => void;
 }
 
 // Define specific types for successful and errored items
@@ -43,12 +44,13 @@ interface ErroredItem {
 type ProcessedDataItem = SuccessfulCryptoItem | SuccessfulMarketItem | ErroredItem;
 
 
-const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, className }) => {
+const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, className, onError }) => {
   const [data, setData] = useState<ProcessedDataItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    let anErrorOccurred = false;
     try {
       const promises = symbols.map(async (symbol): Promise<ProcessedDataItem> => {
         try {
@@ -61,20 +63,22 @@ const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName
           }
         } catch (e) {
           console.error(`Error fetching data for ${symbol} in ${marketType} card:`, e);
+          anErrorOccurred = true;
           return { id: symbol, error: true, label: symbol, symbol: symbol, name: symbol };
         }
       });
       const results = await Promise.all(promises);
       setData(results);
+      if (anErrorOccurred) {
+        onError?.();
+      }
     } catch (error) {
-      // This catch is for errors in Promise.all itself or setData, less likely with individual error handling.
       console.error(`Overall error processing ${marketType} data:`, error);
-      // If a catastrophic error occurs, set all items to an error state or a general card error.
-      // For simplicity, current implementation relies on individual error states.
+      onError?.();
     } finally {
       setIsLoading(false);
     }
-  }, [marketType, symbols]);
+  }, [marketType, symbols, onError]);
 
   useEffect(() => {
     fetchData();
