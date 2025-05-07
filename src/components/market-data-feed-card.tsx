@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { FC } from 'react';
@@ -63,7 +64,7 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, showYTD ? 3600000 : 60000); // Refresh less often for YTD
+    const intervalId = setInterval(fetchData, 60000); // Refresh every 60 seconds
     return () => clearInterval(intervalId);
   }, [marketType, symbolsKey, showYTD, symbols]); 
 

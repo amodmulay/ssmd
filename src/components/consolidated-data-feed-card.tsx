@@ -1,3 +1,4 @@
+
 "use client";
 import type { FC } from 'react';
 import { useEffect, useState, useMemo } from 'react';
@@ -55,7 +56,7 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, showYTD ? 3600000 : 60000);
+    const intervalId = setInterval(fetchData, 60000); // Refresh every 60 seconds
     return () => clearInterval(intervalId);
   }, [cryptoSymbolsKey, forexSymbolsKey, showYTD, cryptoSymbols, forexSymbols]);
 
