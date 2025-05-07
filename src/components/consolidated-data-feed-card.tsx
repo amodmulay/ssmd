@@ -2,23 +2,27 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Download } from 'lucide-react';
+import { Download, BarChartHorizontalBig, List } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { getCryptoData, type CryptoData } from '@/services/crypto';
 import { getMarketData, type MarketData } from '@/services/market';
 import { getBondRateData, type BondRateData } from '@/services/bond-rate';
 import { useInterval } from '@/hooks/use-interval';
 import { useToast } from "@/hooks/use-toast";
+import ConsolidatedDataGraph from './consolidated-data-graph';
 
-interface ConsolidatedDataItem {
+export interface ConsolidatedDataItem {
   id: string;
   label: string;
   type: 'crypto' | 'market' | 'bond';
   data: CryptoData | MarketData | BondRateData | null;
   error?: boolean;
+  symbol: string; // original symbol used for fetching
 }
 
 const initialItems: { id: string; label: string; type: 'crypto' | 'market' | 'bond'; symbol: string }[] = [
@@ -38,9 +42,12 @@ interface ConsolidatedDataFeedCardProps {
   onError?: () => void;
 }
 
+type ViewMode = 'cards' | 'graph';
+
 const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onError }) => {
   const [data, setData] = useState<ConsolidatedDataItem[]>(initialItems.map(item => ({ ...item, data: null })));
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -48,7 +55,7 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
     setIsLoading(true);
     let anErrorOccurred = false;
     try {
-      const promises = initialItems.map(async (itemConfig) => {
+      const promises = initialItems.map(async (itemConfig): Promise<ConsolidatedDataItem> => {
         let itemData: CryptoData | MarketData | BondRateData | null = null;
         let error = false;
         try {
@@ -88,7 +95,7 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
   const handleScreenshot = async () => {
     if (cardRef.current) {
       try {
-        const canvas = await html2canvas(cardRef.current, { scale: 2 }); // Increase scale for better quality
+        const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() === '0 0% 87.8%' ? '#E0E0E0' : '#1A237E' });
         const image = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.href = image;
@@ -104,50 +111,74 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
     }
   };
 
+  const isAnyDataAvailable = data.some(d => d.data && !d.error);
+
   return (
-    <div ref={cardRef} className="shadow-lg rounded-lg">
-      <MarketCardShell title="Overview" iconName="BarChart3" isLoading={isLoading && !data.some(d=>d.data)} contentClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {data.map((item) => {
-          if (item.error || !item.data) {
-            return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
-          }
-          if (item.type === 'crypto' && item.data) {
-            const crypto = item.data as CryptoData;
-            return (
-              <MarketDataItem
-                key={item.id}
-                label={item.label}
-                value={crypto.price}
-                change={crypto.priceChange24h}
-                valuePrefix="$"
-                isLoading={isLoading && !item.data}
-              />
-            );
-          } else if (item.type === 'market' && item.data) {
-            const market = item.data as MarketData;
-            return (
-              <MarketDataItem
-                key={item.id}
-                label={item.label}
-                value={market.value}
-                change={market.change}
-                isLoading={isLoading && !item.data}
-              />
-            );
-          } else if (item.type === 'bond' && item.data) {
-            const bond = item.data as BondRateData;
-            return (
-              <MarketDataItem
-                key={item.id}
-                label={item.label}
-                value={(bond.rate * 100)} // Display as percentage
-                valueSuffix="%"
-                isLoading={isLoading && !item.data}
-              />
-            );
-          }
-          return null;
-        })}
+    <div ref={cardRef} className="bg-card p-4 rounded-lg shadow-lg">
+      <MarketCardShell 
+        title="Overview" 
+        iconName="BarChart3" 
+        isLoading={isLoading && !isAnyDataAvailable}
+        headerChildren={
+          <div className="flex items-center space-x-2">
+            <List className={`h-5 w-5 ${viewMode === 'cards' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Switch
+              id="view-mode-toggle"
+              checked={viewMode === 'graph'}
+              onCheckedChange={(checked) => setViewMode(checked ? 'graph' : 'cards')}
+              aria-label="Toggle view mode"
+            />
+            <BarChartHorizontalBig className={`h-5 w-5 ${viewMode === 'graph' ? 'text-primary' : 'text-muted-foreground'}`} />
+          </div>
+        }
+      >
+        {viewMode === 'cards' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {data.map((item) => {
+              if (item.error || !item.data) {
+                return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
+              }
+              if (item.type === 'crypto' && item.data) {
+                const crypto = item.data as CryptoData;
+                return (
+                  <MarketDataItem
+                    key={item.id}
+                    label={item.label}
+                    value={crypto.price}
+                    change={crypto.priceChange24h}
+                    valuePrefix="$"
+                    isLoading={isLoading && !item.data}
+                  />
+                );
+              } else if (item.type === 'market' && item.data) {
+                const market = item.data as MarketData;
+                return (
+                  <MarketDataItem
+                    key={item.id}
+                    label={item.label}
+                    value={market.value}
+                    change={market.change}
+                    isLoading={isLoading && !item.data}
+                  />
+                );
+              } else if (item.type === 'bond' && item.data) {
+                const bond = item.data as BondRateData;
+                return (
+                  <MarketDataItem
+                    key={item.id}
+                    label={item.label}
+                    value={(bond.rate * 100)} 
+                    valueSuffix="%"
+                    isLoading={isLoading && !item.data}
+                  />
+                );
+              }
+              return null;
+            })}
+          </div>
+        ) : (
+          <ConsolidatedDataGraph data={data} isLoading={isLoading && !isAnyDataAvailable} />
+        )}
       </MarketCardShell>
       <div className="mt-4 flex justify-end">
         <Button onClick={handleScreenshot} variant="outline">

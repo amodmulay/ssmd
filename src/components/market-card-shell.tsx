@@ -15,28 +15,33 @@ const iconMap: { [key: string]: LucideIcon } = {
 
 interface MarketCardShellProps {
   title: string;
-  iconName?: string; // Changed from icon?: LucideIcon
+  iconName?: string;
   isLoading?: boolean;
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
+  headerChildren?: React.ReactNode; // Added to allow custom elements in header
 }
 
 const MarketCardShell: React.FC<MarketCardShellProps> = ({
   title,
-  iconName, // Changed from icon
+  iconName,
   isLoading,
   children,
   className,
   contentClassName,
+  headerChildren,
 }) => {
   const IconComponent = iconName ? iconMap[iconName] : null;
 
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-medium text-primary">{title}</CardTitle>
-        {IconComponent && <IconComponent className="h-5 w-5 text-accent" />}
+        <div className="flex items-center">
+          {IconComponent && <IconComponent className="h-5 w-5 text-accent mr-2" />}
+          <CardTitle className="text-lg font-medium text-primary">{title}</CardTitle>
+        </div>
+        {headerChildren}
       </CardHeader>
       <CardContent className={contentClassName}>
         {isLoading ? (
