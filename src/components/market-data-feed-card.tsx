@@ -10,24 +10,30 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getForexData, type ForexData } from '@/services/forex';
-import { ArrowUpRight, ArrowDownRight, Minus, AlertCircle } from 'lucide-react';
+import { getIndexData, type IndexData } from '@/services/indices'; // Changed from forex to indices
+import { ArrowUpRight, ArrowDownRight, Minus, AlertCircle, Coins, Landmark, AreaChart, Globe, Euro, TrendingUp, Sunrise } from 'lucide-react';
 
 interface MarketDataFeedCardProps {
   title: string;
-  iconName: string; // Changed from LucideIcon to string
-  marketType: 'crypto' | 'forex';
+  iconName: string; 
+  marketType: 'crypto' | 'index'; // Changed from forex to index
   symbols: string[];
   showYTD: boolean;
 }
 
-type CombinedData = CryptoData | ForexData;
+type CombinedData = CryptoData | IndexData; // Updated CombinedData
 
 // Dynamically import Lucide icons
 const iconComponents: { [key: string]: LucideIcon } = {
-  Coins: require('lucide-react').Coins,
-  Landmark: require('lucide-react').Landmark,
-  // Add other icons here as needed
+  Coins: Coins,
+  Landmark: Landmark,
+  AreaChart: AreaChart,
+  Globe: Globe,
+  Euro: Euro,
+  TrendingUp: TrendingUp,
+  Sunrise: Sunrise,
+  // Fallback icon
+  AlertCircle: AlertCircle,
 };
 
 
@@ -37,7 +43,7 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
   const [error, setError] = useState<string | null>(null);
 
   const symbolsKey = useMemo(() => symbols.join(','), [symbols]);
-  const Icon = iconComponents[iconName] || AlertCircle; // Fallback icon
+  const Icon = iconComponents[iconName] || AlertCircle; 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -50,9 +56,9 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
         if (marketType === 'crypto') {
           const cryptoPromises = symbols.map(symbol => getCryptoData(symbol, currentPeriod));
           fetchedData = (await Promise.all(cryptoPromises)).filter(d => d !== null) as CryptoData[];
-        } else if (marketType === 'forex') {
-          const forexPromises = symbols.map(symbol => getForexData(symbol, currentPeriod));
-          fetchedData = (await Promise.all(forexPromises)).filter(d => d !== null) as ForexData[];
+        } else if (marketType === 'index') { // Changed from forex to index
+          const indexPromises = symbols.map(symbol => getIndexData(symbol, currentPeriod)); // Use getIndexData
+          fetchedData = (await Promise.all(indexPromises)).filter(d => d !== null) as IndexData[];
         }
         setData(fetchedData);
       } catch (err) {
@@ -64,12 +70,12 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 60000); // Refresh every 60 seconds
+    const intervalId = setInterval(fetchData, 60000); 
     return () => clearInterval(intervalId);
   }, [marketType, symbolsKey, showYTD, symbols]); 
 
   const renderPriceChange = (priceChange: number | undefined) => {
-    if (priceChange === undefined) {
+    if (priceChange === undefined || priceChange === null) { // Handle null as well
       return <span className="text-muted-foreground">N/A</span>;
     }
     const isPositive = priceChange > 0;
@@ -132,17 +138,29 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
             </TableHeader>
             <TableBody>
               {data.map((item) => {
-                const name = 'name' in item ? item.name : item.symbol;
-                const currentPrice = 'current_price' in item ? item.current_price : item.price;
-                const priceChange = 'price_change_percentage_24h' in item 
-                                      ? (showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h)
-                                      : item.changesPercentage;
+                // Common properties
+                const name = item.name || ('symbol' in item ? item.symbol : 'Unknown'); // Ensure name exists
+                let currentPrice: number | undefined;
+                let priceChange: number | undefined;
+
+                if (marketType === 'crypto' && 'current_price' in item) {
+                  currentPrice = item.current_price;
+                  priceChange = showYTD 
+                                ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) 
+                                : item.price_change_percentage_24h;
+                } else if (marketType === 'index' && 'price' in item) {
+                  currentPrice = item.price;
+                  priceChange = showYTD 
+                                ? (item.ytdChangePercentage ?? item.changesPercentage) 
+                                : item.changesPercentage;
+                }
+                
                 return (
                   <TableRow key={name}>
-                    <TableCell className="font-medium">
-                      {name.length > 10 ? name.substring(0,10) + "..." : name}
+                    <TableCell className="font-medium" title={name}>
+                      {name.length > 15 ? name.substring(0,15) + "..." : name}
                     </TableCell>
-                    <TableCell className="text-right">${currentPrice !== undefined ? currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: marketType === 'crypto' ? 8 : 4 }) : 'N/A'}</TableCell>
+                    <TableCell className="text-right">${currentPrice !== undefined ? currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: marketType === 'crypto' ? 8 : 2 }) : 'N/A'}</TableCell>
                     <TableCell className="text-right">{renderPriceChange(priceChange)}</TableCell>
                   </TableRow>
                 );

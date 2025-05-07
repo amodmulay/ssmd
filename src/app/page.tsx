@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Info, CalendarDays, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -19,7 +20,7 @@ export default function Home() {
           <h1 className="text-3xl font-bold text-primary">
             SSMD: Super Simple Market Dashboard
           </h1>
-          <p className="text-muted-foreground">Track Crypto and Forex markets at a glance.</p>
+          <p className="text-muted-foreground">Track Crypto and Stock Market Indices at a glance.</p>
         </div>
         <Button
             variant="outline"
@@ -39,8 +40,8 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-primary mb-4">Overview</h2>
         <ConsolidatedDataFeedCard
           title="Market Overview"
-          cryptoSymbols={['bitcoin', 'ethereum', 'ripple']}
-          forexSymbols={['EURUSD', 'USDJPY', 'GBPUSD']}
+          cryptoSymbols={['bitcoin', 'ethereum']}
+          indexSymbols={['^GSPC', '^IXIC']} // S&P 500 and Nasdaq
           showYTD={showYTDGlobal}
         />
       </section>
@@ -66,16 +67,37 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <MarketDataFeedCard
             title="Crypto Markets"
-            iconName="Coins" // Pass icon name as string
+            iconName="Coins"
             marketType="crypto"
             symbols={['bitcoin', 'ethereum', 'ripple', 'litecoin', 'cardano']}
             showYTD={showYTDGlobal}
           />
           <MarketDataFeedCard
-            title="Forex Markets"
-            iconName="Landmark" // Pass icon name as string
-            marketType="forex"
-            symbols={['EURUSD', 'USDJPY', 'GBPUSD', 'AUDUSD', 'USDCAD']}
+            title="US Major Indices"
+            iconName="AreaChart" 
+            marketType="index"
+            symbols={['^GSPC', '^IXIC']} // S&P 500, Nasdaq
+            showYTD={showYTDGlobal}
+          />
+          <MarketDataFeedCard
+            title="European Indices"
+            iconName="Euro" 
+            marketType="index"
+            symbols={['^GDAXI', '^FTSE']} // DAX (Germany), FTSE 100 (UK)
+            showYTD={showYTDGlobal}
+          />
+          <MarketDataFeedCard
+            title="Asian Indices"
+            iconName="Sunrise" // Or Globe
+            marketType="index"
+            symbols={['^N225', '^HSI']} // Nikkei 225 (Japan), Hang Seng (Hong Kong)
+            showYTD={showYTDGlobal}
+          />
+          <MarketDataFeedCard
+            title="Indian Indices"
+            iconName="TrendingUp" 
+            marketType="index"
+            symbols={['^NSEI']} // Nifty 50 (India)
             showYTD={showYTDGlobal}
           />
         </div>
@@ -87,7 +109,7 @@ export default function Home() {
         <AlertDescription>
           Market data is provided for informational purposes only and may be delayed.
           This is not financial advice. All data is subject to provider terms.
-          Crypto data powered by CoinGecko. Forex data powered by FinancialModelingPrep.
+          Crypto data powered by CoinGecko. Index data powered by FinancialModelingPrep.
         </AlertDescription>
       </Alert>
     </main>

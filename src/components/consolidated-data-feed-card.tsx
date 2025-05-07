@@ -5,27 +5,27 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, Landmark } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, AreaChart } from 'lucide-react'; // Replaced Landmark with AreaChart
 import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getForexData, type ForexData } from '@/services/forex';
+import { getIndexData, type IndexData } from '@/services/indices'; // Changed from forex to indices
 import { Badge } from '@/components/ui/badge';
 
 interface ConsolidatedDataFeedCardProps {
   title: string;
   cryptoSymbols: string[];
-  forexSymbols: string[];
+  indexSymbols: string[]; // Changed from forexSymbols to indexSymbols
   showYTD: boolean;
 }
 
-type CombinedData = CryptoData | ForexData;
+type CombinedData = CryptoData | IndexData; // Updated CombinedData
 
-const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, forexSymbols, showYTD }) => {
+const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, indexSymbols, showYTD }) => {
   const [data, setData] = useState<CombinedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const cryptoSymbolsKey = useMemo(() => cryptoSymbols.join(','), [cryptoSymbols]);
-  const forexSymbolsKey = useMemo(() => forexSymbols.join(','), [forexSymbols]);
+  const indexSymbolsKey = useMemo(() => indexSymbols.join(','), [indexSymbols]); // Changed from forexSymbolsKey
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,16 +34,16 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
       try {
         const currentPeriod = showYTD ? 'ytd' : '24h';
         const cryptoPromises = cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod));
-        const forexPromises = forexSymbols.map(symbol => getForexData(symbol, currentPeriod));
+        const indexPromises = indexSymbols.map(symbol => getIndexData(symbol, currentPeriod)); // Use getIndexData
 
-        const [cryptoResults, forexResults] = await Promise.all([
+        const [cryptoResults, indexResults] = await Promise.all([ // Changed from forexResults
           Promise.all(cryptoPromises),
-          Promise.all(forexPromises)
+          Promise.all(indexPromises) // Changed from forexPromises
         ]);
 
         const fetchedData = [
           ...cryptoResults.filter(d => d !== null) as CryptoData[],
-          ...forexResults.filter(d => d !== null) as ForexData[]
+          ...indexResults.filter(d => d !== null) as IndexData[] // Changed from ForexData
         ];
         
         setData(fetchedData);
@@ -56,18 +56,20 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 60000); // Refresh every 60 seconds
+    const intervalId = setInterval(fetchData, 60000); 
     return () => clearInterval(intervalId);
-  }, [cryptoSymbolsKey, forexSymbolsKey, showYTD, cryptoSymbols, forexSymbols]);
+  }, [cryptoSymbolsKey, indexSymbolsKey, showYTD, cryptoSymbols, indexSymbols]);
 
 
   const overallSentiment = useMemo(() => {
     if (data.length === 0) return 'neutral';
-    const changes = data.map(item => 
-        'price_change_percentage_24h' in item 
-            ? (showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h)
-            : (showYTD ? (item.ytdChangePercentage ?? item.changesPercentage) : item.changesPercentage)
-    ).filter(change => typeof change === 'number') as number[];
+    const changes = data.map(item => {
+        if ('current_price' in item) { // CryptoData
+            return showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h;
+        } else { // IndexData
+            return showYTD ? (item.ytdChangePercentage ?? item.changesPercentage) : item.changesPercentage;
+        }
+    }).filter(change => typeof change === 'number') as number[];
     
     if (changes.length === 0) return 'neutral';
     const averageChange = changes.reduce((acc, curr) => acc + curr, 0) / changes.length;
@@ -94,13 +96,13 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
       <CardContent>
         {loading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(cryptoSymbols.length + indexSymbols.length)].map((_, i) => (
               <div key={i} className="p-2 bg-card rounded-lg shadow-md border border-border/50 min-h-[90px] flex flex-col justify-between">
                 <div>
-                  <Skeleton className="h-4 w-20 mb-1" /> {/* For name + icon */}
-                  <Skeleton className="h-5 w-24 mb-1" /> {/* For price */}
+                  <Skeleton className="h-4 w-20 mb-1" /> 
+                  <Skeleton className="h-5 w-24 mb-1" /> 
                 </div>
-                <Skeleton className="h-4 w-16 self-start mt-1" /> {/* For change % */}
+                <Skeleton className="h-4 w-16 self-start mt-1" /> 
               </div>
             ))}
           </div>
@@ -122,21 +124,21 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
         {!loading && !error && data.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {data.map((item) => {
-              const name = 'name' in item ? item.name : item.symbol;
+              const name = item.name || ('symbol' in item ? item.symbol : 'Unknown');
               const isCrypto = 'current_price' in item;
-              const currentPrice = isCrypto ? (item as CryptoData).current_price : (item as ForexData).price;
+              const currentPrice = isCrypto ? (item as CryptoData).current_price : (item as IndexData).price;
               
               const priceChange = isCrypto
                                     ? (showYTD ? ((item as CryptoData).price_change_percentage_ytd_in_currency ?? (item as CryptoData).price_change_percentage_24h) : (item as CryptoData).price_change_percentage_24h)
-                                    : (showYTD ? ((item as ForexData).ytdChangePercentage ?? (item as ForexData).changesPercentage) : (item as ForexData).changesPercentage);
+                                    : (showYTD ? ((item as IndexData).ytdChangePercentage ?? (item as IndexData).changesPercentage) : (item as IndexData).changesPercentage);
 
-              const ItemIcon = isCrypto ? Coins : Landmark;
+              const ItemIcon = isCrypto ? Coins : AreaChart; // Use AreaChart for indices
               const changeColor = typeof priceChange === 'number' && priceChange > 0 ? 'text-green-500' : typeof priceChange === 'number' && priceChange < 0 ? 'text-red-500' : 'text-muted-foreground';
 
               const formattedPrice = currentPrice !== undefined
                 ? `$${currentPrice.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
-                    maximumFractionDigits: isCrypto ? 8 : 4,
+                    maximumFractionDigits: isCrypto ? 8 : 2, // Indices typically have 2 decimal places
                   })}`
                 : 'N/A';
 
@@ -152,7 +154,7 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
                     </div>
                   </div>
                   <div className={`text-sm font-medium ${changeColor} mt-1 self-start`}>
-                    {typeof priceChange === 'number' ? `${priceChange.toFixed(2)}%` : 'N/A'}
+                    {(typeof priceChange === 'number' && priceChange !== null) ? `${priceChange.toFixed(2)}%` : 'N/A'}
                   </div>
                 </div>
               );
