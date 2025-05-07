@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Firebase Studio',
-  description: 'A NextJS starter in Firebase Studio.',
+  title: 'SSMD: Super Simple Market Dashboard',
+  description: 'A NextJS starter in Firebase Studio providing a simple market dashboard.',
 };
 
 export default function RootLayout({
@@ -26,10 +26,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
         {children}
         <Toaster />
       </body>
     </html>
   );
 }
+
