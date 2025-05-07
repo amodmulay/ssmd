@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'SSMD: Super Simple Market Dashboard',
-  description: 'A NextJS starter in Firebase Studio providing a simple market dashboard.',
+  description: 'A NextJS starter in Firebase Studio providing a simple market dashboard to track Crypto and Forex markets.',
 };
 
 export default function RootLayout({

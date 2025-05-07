@@ -14,7 +14,7 @@ import { ArrowUpRight, ArrowDownRight, Minus, AlertCircle } from 'lucide-react';
 
 interface MarketDataFeedCardProps {
   title: string;
-  icon: LucideIcon;
+  iconName: string; // Changed from LucideIcon to string
   marketType: 'crypto' | 'forex';
   symbols: string[];
   showYTD: boolean;
@@ -22,12 +22,21 @@ interface MarketDataFeedCardProps {
 
 type CombinedData = CryptoData | ForexData;
 
-const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, icon: Icon, marketType, symbols, showYTD }) => {
+// Dynamically import Lucide icons
+const iconComponents: { [key: string]: LucideIcon } = {
+  Coins: require('lucide-react').Coins,
+  Landmark: require('lucide-react').Landmark,
+  // Add other icons here as needed
+};
+
+
+const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, showYTD }) => {
   const [data, setData] = useState<CombinedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const symbolsKey = useMemo(() => symbols.join(','), [symbols]);
+  const Icon = iconComponents[iconName] || AlertCircle; // Fallback icon
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,9 +65,12 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, icon: Icon, ma
     fetchData();
     const intervalId = setInterval(fetchData, showYTD ? 3600000 : 60000); // Refresh less often for YTD
     return () => clearInterval(intervalId);
-  }, [marketType, symbolsKey, showYTD, symbols]); // Added symbols to dependency array for directness
+  }, [marketType, symbolsKey, showYTD, symbols]); 
 
-  const renderPriceChange = (priceChange: number) => {
+  const renderPriceChange = (priceChange: number | undefined) => {
+    if (priceChange === undefined) {
+      return <span className="text-muted-foreground">N/A</span>;
+    }
     const isPositive = priceChange > 0;
     const isNegative = priceChange < 0;
     const IconComponent = isPositive ? ArrowUpRight : isNegative ? ArrowDownRight : Minus;
@@ -129,8 +141,8 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, icon: Icon, ma
                     <TableCell className="font-medium">
                       {name.length > 10 ? name.substring(0,10) + "..." : name}
                     </TableCell>
-                    <TableCell className="text-right">${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: marketType === 'crypto' ? 8 : 4 })}</TableCell>
-                    <TableCell className="text-right">{renderPriceChange(priceChange || 0)}</TableCell>
+                    <TableCell className="text-right">${currentPrice !== undefined ? currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: marketType === 'crypto' ? 8 : 4 }) : 'N/A'}</TableCell>
+                    <TableCell className="text-right">{renderPriceChange(priceChange)}</TableCell>
                   </TableRow>
                 );
               })}

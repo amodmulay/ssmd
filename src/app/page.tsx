@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins, Landmark, Info, TrendingUp, CalendarDays, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Info, CalendarDays, ToggleLeft, ToggleRight } from 'lucide-react';
 import MarketDataFeedCard from '@/components/market-data-feed-card';
 import ConsolidatedDataFeedCard from '@/components/consolidated-data-feed-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -36,6 +36,7 @@ export default function Home() {
 
       {/* Consolidated View / Overview */}
       <section className="mb-8">
+        <h2 className="text-2xl font-semibold text-primary mb-4">Overview</h2>
         <ConsolidatedDataFeedCard
           title="Market Overview"
           cryptoSymbols={['bitcoin', 'ethereum', 'ripple']}
@@ -65,14 +66,14 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <MarketDataFeedCard
             title="Crypto Markets"
-            icon={Coins}
+            iconName="Coins" // Pass icon name as string
             marketType="crypto"
             symbols={['bitcoin', 'ethereum', 'ripple', 'litecoin', 'cardano']}
             showYTD={showYTDGlobal}
           />
           <MarketDataFeedCard
             title="Forex Markets"
-            icon={Landmark}
+            iconName="Landmark" // Pass icon name as string
             marketType="forex"
             symbols={['EURUSD', 'USDJPY', 'GBPUSD', 'AUDUSD', 'USDCAD']}
             showYTD={showYTDGlobal}
