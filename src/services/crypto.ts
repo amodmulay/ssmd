@@ -20,7 +20,8 @@ export interface CryptoData {
 }
 
 const API_BASE_URL = 'https://api.coingecko.com/api/v3'; 
-const COINGECKO_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY; // Get key from .env
+// const COINGECKO_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY; // Get key from .env
+const COINGECKO_API_KEY = 'CG-N8SDgJHJADDddJsfvomGJ1w7';
 
 const MOCK_CRYPTO_DATA: CryptoData[] = [
   { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png?1696501400', current_price: 60000, market_cap: 1200000000000, market_cap_rank: 1, total_volume: 50000000000, price_change_percentage_24h: 1.5, price_change_percentage_ytd_in_currency: 50.0, last_updated: new Date().toISOString() },

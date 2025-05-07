@@ -6,26 +6,23 @@ import html2canvas from 'html2canvas';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, AreaChart, Camera } from 'lucide-react'; 
+import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, AreaChart, Camera } from 'lucide-react';
 import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getIndexData, type IndexData } from '@/services/indices'; 
+import { getIndexData, type IndexData } from '@/services/indices';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { DataSourceType } from '@/lib/utils';
-
 
 interface ConsolidatedDataFeedCardProps {
   title: string;
   cryptoSymbols: string[];
-  indexSymbols: string[]; 
+  indexSymbols: string[];
   showYTD: boolean;
-  dataSource: DataSourceType; // Added dataSource prop
 }
 
-type CombinedData = CryptoData | IndexData; 
+type CombinedData = CryptoData | IndexData;
 
-const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, indexSymbols, showYTD, dataSource }) => {
+const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, indexSymbols, showYTD }) => {
   const [data, setData] = useState<CombinedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +30,7 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
   const { toast } = useToast();
 
   const cryptoSymbolsKey = useMemo(() => cryptoSymbols.join(','), [cryptoSymbols]);
-  const indexSymbolsKey = useMemo(() => indexSymbols.join(','), [indexSymbols]); 
+  const indexSymbolsKey = useMemo(() => indexSymbols.join(','), [indexSymbols]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,27 +38,20 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
       setError(null);
       try {
         const currentPeriod = showYTD ? 'ytd' : '24h';
-        
-        // Conditionally fetch based on dataSource
-        const cryptoPromises = dataSource === 'api' 
-          ? cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod))
-          : cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod, true)); // force mock for 'yahoo'
 
-        const indexPromises = dataSource === 'api'
-          ? indexSymbols.map(symbol => getIndexData(symbol, currentPeriod))
-          : indexSymbols.map(symbol => getIndexData(symbol, currentPeriod, true)); // force mock for 'yahoo'
-        
+        // Services will use mock data if API key is missing, or live data if present.
+        const cryptoPromises = cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod));
+        const indexPromises = indexSymbols.map(symbol => getIndexData(symbol, currentPeriod));
 
-        const [cryptoResults, indexResults] = await Promise.all([ 
-          Promise.all(cryptoPromises),
-          Promise.all(indexPromises) 
+        const [cryptoResults, indexResults] = await Promise.all([ Promise.all(cryptoPromises),
+          Promise.all(indexPromises)
         ]);
 
         const fetchedData = [
           ...cryptoResults.filter(d => d !== null) as CryptoData[],
-          ...indexResults.filter(d => d !== null) as IndexData[] 
+          ...indexResults.filter(d => d !== null) as IndexData[]
         ];
-        
+
         setData(fetchedData);
       } catch (err) {
         console.error('Error fetching consolidated data:', err);
@@ -72,21 +62,21 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 60000); 
+    const intervalId = setInterval(fetchData, 60000);
     return () => clearInterval(intervalId);
-  }, [cryptoSymbolsKey, indexSymbolsKey, showYTD, cryptoSymbols, indexSymbols, dataSource]);
+  }, [cryptoSymbolsKey, indexSymbolsKey, showYTD]);
 
 
   const overallSentiment = useMemo(() => {
     if (data.length === 0) return 'neutral';
     const changes = data.map(item => {
-        if ('current_price' in item) { 
+        if ('current_price' in item) {
             return showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h;
-        } else { 
+        } else {
             return showYTD ? (item.ytdChangePercentage ?? item.changesPercentage) : item.changesPercentage;
         }
     }).filter(change => typeof change === 'number') as number[];
-    
+
     if (changes.length === 0) return 'neutral';
     const averageChange = changes.reduce((acc, curr) => acc + curr, 0) / changes.length;
     if (averageChange > 0.1) return 'positive';
@@ -149,10 +139,10 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
             {[...Array(cryptoSymbols.length + indexSymbols.length)].map((_, i) => (
               <div key={i} className="p-2 bg-card rounded-lg shadow-md border border-border/50 min-h-[90px] flex flex-col justify-between">
                 <div>
-                  <Skeleton className="h-4 w-20 mb-1" /> 
-                  <Skeleton className="h-5 w-24 mb-1" /> 
+                  <Skeleton className="h-4 w-20 mb-1" />
+                  <Skeleton className="h-5 w-24 mb-1" />
                 </div>
-                <Skeleton className="h-4 w-16 self-start mt-1" /> 
+                <Skeleton className="h-4 w-16 self-start mt-1" />
               </div>
             ))}
           </div>
@@ -164,7 +154,7 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        {!loading && !error && data.length === 0 && (
+       {!loading && !error && data.length === 0 && (
            <Alert variant="default">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Data</AlertTitle>
@@ -177,18 +167,18 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
               const name = item.name || ('symbol' in item ? item.symbol : 'Unknown');
               const isCrypto = 'current_price' in item;
               const currentPrice = isCrypto ? (item as CryptoData).current_price : (item as IndexData).price;
-              
+
               const priceChange = isCrypto
                                     ? (showYTD ? ((item as CryptoData).price_change_percentage_ytd_in_currency ?? (item as CryptoData).price_change_percentage_24h) : (item as CryptoData).price_change_percentage_24h)
                                     : (showYTD ? ((item as IndexData).ytdChangePercentage ?? (item as IndexData).changesPercentage) : (item as IndexData).changesPercentage);
 
-              const ItemIcon = isCrypto ? Coins : AreaChart; 
+              const ItemIcon = isCrypto ? Coins : AreaChart;
               const changeColor = typeof priceChange === 'number' && priceChange > 0 ? 'text-green-500' : typeof priceChange === 'number' && priceChange < 0 ? 'text-red-500' : 'text-muted-foreground';
 
               const formattedPrice = currentPrice !== undefined
                 ? `$${currentPrice.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
-                    maximumFractionDigits: isCrypto ? 8 : 2, 
+                    maximumFractionDigits: isCrypto ? 8 : 2,
                   })}`
                 : 'N/A';
 
