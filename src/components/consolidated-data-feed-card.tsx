@@ -2,27 +2,32 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Download, BarChartHorizontalBig, List } from 'lucide-react';
+import { Download, BarChartHorizontalBig, List, CalendarClock, Clock } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getMarketData, type MarketData } from '@/services/market';
-import { getBondRateData, type BondRateData } from '@/services/bond-rate';
+import { getCryptoData, type CryptoPeriodData } from '@/services/crypto';
+import { getMarketData, type MarketPeriodData } from '@/services/market';
+import { getBondRateData, type BondRatePeriodData } from '@/services/bond-rate';
 import { useInterval } from '@/hooks/use-interval';
 import { useToast } from "@/hooks/use-toast";
 import ConsolidatedDataGraph from './consolidated-data-graph';
 
-export interface ConsolidatedDataItem {
+export interface ProcessedConsolidatedDataItem {
   id: string;
   label: string;
   type: 'crypto' | 'market' | 'bond';
-  data: CryptoData | MarketData | BondRateData | null;
+  symbol: string; // original symbol
+  data: {
+    current: number;
+    previous: number;
+  } | null;
+  valuePrefix?: string;
+  valueSuffix?: string;
   error?: boolean;
-  symbol: string; // original symbol used for fetching
 }
 
 const initialItems: { id: string; label: string; type: 'crypto' | 'market' | 'bond'; symbol: string }[] = [
@@ -43,11 +48,13 @@ interface ConsolidatedDataFeedCardProps {
 }
 
 type ViewMode = 'cards' | 'graph';
+type DataPeriod = '24h' | 'ytd';
 
 const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onError }) => {
-  const [data, setData] = useState<ConsolidatedDataItem[]>(initialItems.map(item => ({ ...item, data: null })));
+  const [data, setData] = useState<ProcessedConsolidatedDataItem[]>(initialItems.map(item => ({ ...item, data: null })));
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [dataPeriod, setDataPeriod] = useState<DataPeriod>('24h');
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -55,23 +62,31 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
     setIsLoading(true);
     let anErrorOccurred = false;
     try {
-      const promises = initialItems.map(async (itemConfig): Promise<ConsolidatedDataItem> => {
-        let itemData: CryptoData | MarketData | BondRateData | null = null;
+      const promises = initialItems.map(async (itemConfig): Promise<ProcessedConsolidatedDataItem> => {
+        let itemData: { current: number; previous: number } | null = null;
         let error = false;
+        let valuePrefix: string | undefined = undefined;
+        let valueSuffix: string | undefined = undefined;
+
         try {
           if (itemConfig.type === 'crypto') {
-            itemData = await getCryptoData(itemConfig.symbol);
+            const fetched = await getCryptoData(itemConfig.symbol, dataPeriod);
+            itemData = { current: fetched.currentPrice, previous: fetched.previousPrice };
+            valuePrefix = '$';
           } else if (itemConfig.type === 'market') {
-            itemData = await getMarketData(itemConfig.symbol);
+            const fetched = await getMarketData(itemConfig.symbol, dataPeriod);
+            itemData = { current: fetched.currentValue, previous: fetched.previousValue };
           } else if (itemConfig.type === 'bond') {
-            itemData = await getBondRateData(itemConfig.symbol);
+            const fetched = await getBondRateData(itemConfig.symbol, dataPeriod);
+            itemData = { current: fetched.currentRate * 100, previous: fetched.previousRate * 100 }; // Convert to percentage points
+            valueSuffix = '%';
           }
         } catch (e) {
-          console.error(`Error fetching data for ${itemConfig.label}:`, e);
+          console.error(`Error fetching data for ${itemConfig.label} (${dataPeriod}):`, e);
           error = true;
           anErrorOccurred = true;
         }
-        return { ...itemConfig, data: itemData, error };
+        return { ...itemConfig, data: itemData, error, valuePrefix, valueSuffix };
       });
       const results = await Promise.all(promises);
       setData(results);
@@ -84,13 +99,13 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
     } finally {
       setIsLoading(false);
     }
-  }, [onError]);
+  }, [onError, dataPeriod]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [fetchData]); // Refetch when dataPeriod changes
 
-  useInterval(fetchData, 30000);
+  useInterval(fetchData, 30000); // Interval remains for auto-refresh
 
   const handleScreenshot = async () => {
     if (cardRef.current) {
@@ -115,20 +130,34 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
 
   return (
     <div ref={cardRef} className="bg-card p-4 rounded-lg shadow-lg">
-      <MarketCardShell 
-        title="Overview" 
-        iconName="BarChart3" 
+      <MarketCardShell
+        title="Overview"
+        iconName="BarChart3"
         isLoading={isLoading && !isAnyDataAvailable}
         headerChildren={
-          <div className="flex items-center space-x-2">
-            <List className={`h-5 w-5 ${viewMode === 'cards' ? 'text-primary' : 'text-muted-foreground'}`} />
-            <Switch
-              id="view-mode-toggle"
-              checked={viewMode === 'graph'}
-              onCheckedChange={(checked) => setViewMode(checked ? 'graph' : 'cards')}
-              aria-label="Toggle view mode"
-            />
-            <BarChartHorizontalBig className={`h-5 w-5 ${viewMode === 'graph' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1">
+              <Clock className={`h-4 w-4 ${dataPeriod === '24h' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Label htmlFor="period-toggle" className="text-xs text-muted-foreground sr-only">Period</Label>
+              <Switch
+                id="period-toggle"
+                checked={dataPeriod === 'ytd'}
+                onCheckedChange={(checked) => setDataPeriod(checked ? 'ytd' : '24h')}
+                aria-label="Toggle data period between 24 hours and Year-to-Date"
+              />
+              <CalendarClock className={`h-4 w-4 ${dataPeriod === 'ytd' ? 'text-primary' : 'text-muted-foreground'}`} />
+            </div>
+            <div className="flex items-center space-x-1">
+              <List className={`h-5 w-5 ${viewMode === 'cards' ? 'text-primary' : 'text-muted-foreground'}`} />
+               <Label htmlFor="view-mode-toggle" className="text-xs text-muted-foreground sr-only">View Mode</Label>
+              <Switch
+                id="view-mode-toggle"
+                checked={viewMode === 'graph'}
+                onCheckedChange={(checked) => setViewMode(checked ? 'graph' : 'cards')}
+                aria-label="Toggle view mode between cards and graph"
+              />
+              <BarChartHorizontalBig className={`h-5 w-5 ${viewMode === 'graph' ? 'text-primary' : 'text-muted-foreground'}`} />
+            </div>
           </div>
         }
       >
@@ -138,46 +167,24 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
               if (item.error || !item.data) {
                 return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
               }
-              if (item.type === 'crypto' && item.data) {
-                const crypto = item.data as CryptoData;
-                return (
-                  <MarketDataItem
-                    key={item.id}
-                    label={item.label}
-                    value={crypto.price}
-                    change={crypto.priceChange24h}
-                    valuePrefix="$"
-                    isLoading={isLoading && !item.data}
-                  />
-                );
-              } else if (item.type === 'market' && item.data) {
-                const market = item.data as MarketData;
-                return (
-                  <MarketDataItem
-                    key={item.id}
-                    label={item.label}
-                    value={market.value}
-                    change={market.change}
-                    isLoading={isLoading && !item.data}
-                  />
-                );
-              } else if (item.type === 'bond' && item.data) {
-                const bond = item.data as BondRateData;
-                return (
-                  <MarketDataItem
-                    key={item.id}
-                    label={item.label}
-                    value={(bond.rate * 100)} 
-                    valueSuffix="%"
-                    isLoading={isLoading && !item.data}
-                  />
-                );
-              }
-              return null;
+              const change = item.data.current - item.data.previous;
+              return (
+                <MarketDataItem
+                  key={item.id}
+                  label={item.label}
+                  value={item.data.current}
+                  change={change}
+                  previousValueForPercentage={item.data.previous}
+                  valuePrefix={item.valuePrefix}
+                  valueSuffix={item.valueSuffix}
+                  isLoading={isLoading && !item.data}
+                  periodLabel={dataPeriod === 'ytd' ? 'YTD' : '24h'}
+                />
+              );
             })}
           </div>
         ) : (
-          <ConsolidatedDataGraph data={data} isLoading={isLoading && !isAnyDataAvailable} />
+          <ConsolidatedDataGraph data={data} isLoading={isLoading && !isAnyDataAvailable} dataPeriod={dataPeriod} />
         )}
       </MarketCardShell>
       <div className="mt-4 flex justify-end">

@@ -4,8 +4,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
-import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getMarketData, type MarketData } from '@/services/market';
+import { getCryptoData, type CryptoPeriodData } from '@/services/crypto';
+import { getMarketData, type MarketPeriodData } from '@/services/market';
 import { useInterval } from '@/hooks/use-interval';
 
 type MarketType = 'crypto' | 'us' | 'eu' | 'asia';
@@ -19,53 +19,50 @@ interface MarketDataFeedCardProps {
   onError?: () => void;
 }
 
-// Define specific types for successful and errored items
-interface SuccessfulCryptoItem extends CryptoData {
-  id: string; // Typically the symbol
-  error?: false;
+interface ProcessedFeedItem {
+  id: string; // symbol
+  label: string; // display name
+  symbol: string; // original symbol for display
+  data: {
+    current: number;
+    previous: number;
+  } | null;
+  valuePrefix?: string;
+  error?: boolean;
 }
-
-interface SuccessfulMarketItem extends MarketData {
-  id: string; // Typically the symbol
-  error?: false;
-}
-
-interface ErroredItem {
-  id: string; // The symbol that failed
-  error: true;
-  label: string; // Display label for the errored item
-  // Ensure no 'price' or 'value' properties to avoid type guard confusion
-  price?: undefined;
-  value?: undefined;
-  symbol?: string; // Store original symbol for context
-  name?: string; // Store original name for context
-}
-
-type ProcessedDataItem = SuccessfulCryptoItem | SuccessfulMarketItem | ErroredItem;
 
 
 const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, className, onError }) => {
-  const [data, setData] = useState<ProcessedDataItem[]>([]);
+  const [data, setData] = useState<ProcessedFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     let anErrorOccurred = false;
     try {
-      const promises = symbols.map(async (symbol): Promise<ProcessedDataItem> => {
+      const promises = symbols.map(async (symbol): Promise<ProcessedFeedItem> => {
+        let itemData: { current: number; previous: number } | null = null;
+        let error = false;
+        let valuePrefix: string | undefined = undefined;
+        let fetchedLabel = symbol; // default label to symbol
+
         try {
           if (marketType === 'crypto') {
-            const result = await getCryptoData(symbol);
-            return { ...result, id: symbol, error: false };
-          } else {
-            const result = await getMarketData(symbol);
-            return { ...result, id: symbol, error: false };
+            const result: CryptoPeriodData = await getCryptoData(symbol, '24h');
+            itemData = { current: result.currentPrice, previous: result.previousPrice };
+            valuePrefix = '$';
+            fetchedLabel = result.symbol; // Use the symbol from the data if formatted
+          } else { // 'us', 'eu', 'asia' markets
+            const result: MarketPeriodData = await getMarketData(symbol, '24h');
+            itemData = { current: result.currentValue, previous: result.previousValue };
+            fetchedLabel = result.name; // Use the name from the data
           }
         } catch (e) {
-          console.error(`Error fetching data for ${symbol} in ${marketType} card:`, e);
+          console.error(`Error fetching 24h data for ${symbol} in ${marketType} card:`, e);
+          error = true;
           anErrorOccurred = true;
-          return { id: symbol, error: true, label: symbol, symbol: symbol, name: symbol };
         }
+        return { id: symbol, label: fetchedLabel, symbol: symbol, data: itemData, error, valuePrefix };
       });
       const results = await Promise.all(promises);
       setData(results);
@@ -89,49 +86,34 @@ const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName
   return (
     <MarketCardShell title={title} iconName={iconName} isLoading={isLoading && data.length === 0} className={className} contentClassName="grid grid-cols-1 md:grid-cols-2 gap-4">
       {isLoading && data.length === 0 ? (
-        // Show skeletons for each symbol while initial data is loading
         symbols.map(symbol => (
             <MarketDataItem key={symbol} label={symbol} value="Loading..." isLoading={true} />
         ))
       ) : (
         data.map((item) => {
-          if (item.error === true) {
+          if (item.error || !item.data) {
             return (
               <MarketDataItem
                 key={item.id}
-                label={item.label}
+                label={item.label} // Use the potentially updated label
                 value="Error"
-                isLoading={false} // Error state means loading is complete for this item
+                isLoading={false}
               />
             );
           }
-          // If not an error, item is either SuccessfulCryptoItem or SuccessfulMarketItem
-          if ('price' in item && typeof item.price === 'number') { // CryptoData
-            const cryptoItem = item as SuccessfulCryptoItem;
-            return (
-              <MarketDataItem
-                key={cryptoItem.id}
-                label={cryptoItem.symbol}
-                value={cryptoItem.price}
-                change={cryptoItem.priceChange24h}
-                valuePrefix="$"
-                isLoading={isLoading && !cryptoItem.price} // Show loading if card is refreshing and this specific item doesn't have data yet.
-              />
-            );
-          } else if ('value' in item && typeof item.value === 'number') { // MarketData
-            const marketItem = item as SuccessfulMarketItem;
-            return (
-              <MarketDataItem
-                key={marketItem.id}
-                label={marketItem.name}
-                value={marketItem.value}
-                change={marketItem.change}
-                isLoading={isLoading && !marketItem.value}
-              />
-            );
-          }
-          // Fallback for unexpected item structure, though types should prevent this
-          return <MarketDataItem key={item.id} label={item.id} value="N/A" isLoading={false} />;
+          const change = item.data.current - item.data.previous;
+          return (
+            <MarketDataItem
+              key={item.id}
+              label={item.label} // Use the potentially updated label
+              value={item.data.current}
+              change={change}
+              previousValueForPercentage={item.data.previous}
+              valuePrefix={item.valuePrefix}
+              isLoading={isLoading && !item.data}
+              periodLabel="24h" // These cards always show 24h
+            />
+          );
         })
       )}
     </MarketCardShell>

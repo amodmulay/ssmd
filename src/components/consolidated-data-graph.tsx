@@ -4,37 +4,46 @@
 import type React from 'react';
 import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ChartConfig } from '@/components/ui/chart';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
-import type { CryptoData } from '@/services/crypto';
-import type { MarketData } from '@/services/market';
-import type { BondRateData } from '@/services/bond-rate';
-import type { ConsolidatedDataItem } from './consolidated-data-feed-card';
+import { ChartContainer } from '@/components/ui/chart';
+import type { ProcessedConsolidatedDataItem } from './consolidated-data-feed-card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ConsolidatedDataGraphProps {
-  data: ConsolidatedDataItem[];
+  data: ProcessedConsolidatedDataItem[];
   isLoading: boolean;
+  dataPeriod: '24h' | 'ytd';
 }
 
 interface ChartDataPoint {
-  name: string;
-  percentChange?: number;
-  currentRate?: number;
+  name: string; // label of the item
+  percentChange?: number; // for crypto and markets
+  currentValue?: number; // for bonds (rate) or market/crypto (price/value)
   tooltipValue?: string;
+  valuePrefix?: string;
+  valueSuffix?: string;
 }
 
-const chartConfig = {
+const chartConfigBase = {
   percentChange: {
-    label: '% Change (24h)',
+    label: '% Change', // Will be appended with (24h) or (YTD)
     color: 'hsl(var(--chart-1))',
   },
-  currentRate: {
-    label: 'Current Rate (%)',
+  currentValueRate: { // Specifically for bond rates
+    label: 'Rate (%)',
     color: 'hsl(var(--chart-2))',
+  },
+  currentValueMarket: { // For market indices
+    label: 'Index Value',
+    color: 'hsl(var(--chart-3))',
+  },
+  currentValueCrypto: { // For crypto prices
+    label: 'Price (USD)',
+    color: 'hsl(var(--chart-4))',
   },
 } satisfies ChartConfig;
 
-const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isLoading }) => {
+
+const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isLoading, dataPeriod }) => {
   if (isLoading) {
     return (
       <div className="w-full h-[400px] p-4">
@@ -42,6 +51,14 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
       </div>
     );
   }
+  
+  const dynamicChartConfig = {
+    ...chartConfigBase,
+    percentChange: {
+      ...chartConfigBase.percentChange,
+      label: `% Change (${dataPeriod.toUpperCase()})`,
+    }
+  };
 
   const processedChartData: ChartDataPoint[] = data
     .map((item) => {
@@ -49,52 +66,43 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
         return { name: item.label, tooltipValue: item.error ? 'Error' : 'N/A' };
       }
 
-      if (item.type === 'crypto' && item.data) {
-        const crypto = item.data as CryptoData;
-        const price = crypto.price;
-        const change = crypto.priceChange24h;
-        let pcValue: number | undefined;
-        const prevPrice = price - change;
-        if (prevPrice !== 0) {
-          pcValue = (change / prevPrice) * 100;
-        } else if (change !== 0) {
-          pcValue = change > 0 ? Infinity : -Infinity;
-        } else {
-          pcValue = 0;
-        }
+      const { current, previous } = item.data;
+      let percentChange: number | undefined = undefined;
+      if (previous !== 0) {
+        percentChange = ((current - previous) / previous) * 100;
+      } else if (current !== previous) { // current is non-zero, previous was zero
+        percentChange = current > 0 ? Infinity : -Infinity;
+      } else { // current is zero, previous was zero
+        percentChange = 0;
+      }
+      
+      const finitePercentChange = Number.isFinite(percentChange) ? percentChange : undefined;
+
+      let tooltipValue = `${item.valuePrefix || ''}${current.toFixed(2)}${item.valueSuffix || ''}`;
+      if (finitePercentChange !== undefined) {
+        tooltipValue += ` (${finitePercentChange.toFixed(2)}% ${dataPeriod.toUpperCase()})`;
+      }
+
+
+      if (item.type === 'bond') { // Bonds primarily show rate, not % change on primary Y-axis
         return {
           name: item.label,
-          percentChange: Number.isFinite(pcValue) ? pcValue : undefined,
-          tooltipValue: `${(pcValue ?? 0).toFixed(2)}% (24h) | $${price.toFixed(2)}`,
-        };
-      } else if (item.type === 'market' && item.data) {
-        const market = item.data as MarketData;
-        const value = market.value;
-        const change = market.change;
-        let pcValue: number | undefined;
-        const prevValue = value - change;
-         if (prevValue !== 0) {
-          pcValue = (change / prevValue) * 100;
-        } else if (change !== 0) {
-          pcValue = change > 0 ? Infinity : -Infinity;
-        } else {
-          pcValue = 0;
-        }
-        return {
-          name: item.label,
-          percentChange: Number.isFinite(pcValue) ? pcValue : undefined,
-          tooltipValue: `${(pcValue ?? 0).toFixed(2)}% | ${value.toFixed(2)} pts`,
-        };
-      } else if (item.type === 'bond' && item.data) {
-        const bond = item.data as BondRateData;
-        const rate = bond.rate * 100;
-        return {
-          name: item.label,
-          currentRate: rate,
-          tooltipValue: `${rate.toFixed(2)}% Rate`,
+          currentValue: current, // This is already in % points
+          percentChange: finitePercentChange, // still calculate for tooltip/secondary axis if needed
+          tooltipValue: `${current.toFixed(2)}% Rate` + (finitePercentChange !== undefined ? ` (${finitePercentChange.toFixed(2)}% ${dataPeriod.toUpperCase()})` : ''),
+          valueSuffix: '%'
         };
       }
-      return null;
+      
+      // For crypto and markets, primary focus is percent change
+      return {
+        name: item.label,
+        percentChange: finitePercentChange,
+        currentValue: current, // Store current value for tooltip or potential secondary axis
+        tooltipValue: tooltipValue,
+        valuePrefix: item.valuePrefix,
+        valueSuffix: item.valueSuffix,
+      };
     })
     .filter((item): item is ChartDataPoint => item !== null);
 
@@ -102,11 +110,23 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
     return <div className="text-center p-4">No data available to display graph.</div>;
   }
   
-  const yAxisDomain = [-10, 10]; // Default domain for percent change
+  // Dynamic Y-axis domain based on data, with some padding
+  const percentChanges = processedChartData.map(d => d.percentChange).filter(pc => pc !== undefined && isFinite(pc)) as number[];
+  const minPc = percentChanges.length > 0 ? Math.min(...percentChanges) : -10;
+  const maxPc = percentChanges.length > 0 ? Math.max(...percentChanges) : 10;
+  const pcPadding = Math.max(1, Math.abs(maxPc - minPc) * 0.1);
+  const yAxisDomainPercent = [Math.floor(minPc - pcPadding), Math.ceil(maxPc + pcPadding)];
+
+  const bondRates = processedChartData.filter(d => d.valueSuffix === '%').map(d => d.currentValue).filter(r => r !== undefined) as number[];
+  const minRate = bondRates.length > 0 ? Math.min(...bondRates) : 0;
+  const maxRate = bondRates.length > 0 ? Math.max(...bondRates) : 5;
+  const ratePadding = Math.max(0.5, Math.abs(maxRate - minRate) * 0.1);
+  const yAxisDomainRate = [Math.max(0, Math.floor(minRate - ratePadding)), Math.ceil(maxRate + ratePadding)];
+
 
   return (
-    <ChartContainer config={chartConfig} className="min-h-[300px] w-full aspect-video">
-      <LineChart accessibilityLayer data={processedChartData} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+    <ChartContainer config={dynamicChartConfig} className="min-h-[300px] w-full aspect-video">
+      <LineChart accessibilityLayer data={processedChartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
         <CartesianGrid vertical={false} />
         <XAxis
           dataKey="name"
@@ -120,22 +140,24 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
           tickFormatter={(value) => value.length > 15 ? `${value.substring(0,12)}...` : value}
         />
         <YAxis
-          yAxisId="left"
+          yAxisId="left" // For percent change
           orientation="left"
           stroke="hsl(var(--foreground))"
           tickFormatter={(value) => `${value}%`}
-          domain={yAxisDomain} // Adjust domain as needed, or let it be auto
+          domain={yAxisDomainPercent}
         />
         <YAxis
-          yAxisId="right"
+          yAxisId="right" // For bond rates
           orientation="right"
           stroke="hsl(var(--foreground))"
           tickFormatter={(value) => `${value}%`}
-          domain={[0, 'dataMax + 2']} // Domain for bond rates, typically 0 to ~10%
+          domain={yAxisDomainRate}
         />
         <Tooltip
             content={({ active, payload }) => {
             if (active && payload && payload.length) {
+              // payload can have multiple entries if multiple lines share an x-axis point
+              // We assume the first one is representative enough for the label, or customize as needed
               const dataPoint = payload[0].payload as ChartDataPoint;
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-sm">
@@ -152,21 +174,23 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
         <Legend />
         <Line
           type="monotone"
-          dataKey="percentChange"
+          dataKey="percentChange" // Used for crypto and markets
           stroke="var(--color-percentChange)"
           strokeWidth={2}
           dot={false}
           yAxisId="left"
-          name="% Change (24h)"
+          name={dynamicChartConfig.percentChange.label as string}
+          connectNulls={false} // Don't connect if percentChange is undefined (e.g. for bonds if not desired)
         />
         <Line
           type="monotone"
-          dataKey="currentRate"
-          stroke="var(--color-currentRate)"
+          dataKey={(data) => data.valueSuffix === '%' ? data.currentValue : undefined} // Only plot for bonds
+          stroke="var(--color-currentValueRate)"
           strokeWidth={2}
           dot={false}
           yAxisId="right"
-          name="Current Rate (%)"
+          name={dynamicChartConfig.currentValueRate.label as string}
+          connectNulls={false}
         />
       </LineChart>
     </ChartContainer>
@@ -174,4 +198,3 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
 };
 
 export default ConsolidatedDataGraph;
-

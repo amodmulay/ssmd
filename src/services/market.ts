@@ -1,7 +1,10 @@
+
+import { format, startOfYear, subDays } from 'date-fns';
+
 /**
- * Represents market data.
+ * Represents market data for a specific period.
  */
-export interface MarketData {
+export interface MarketPeriodData {
   /**
    * The name of the market.
    */
@@ -9,73 +12,128 @@ export interface MarketData {
   /**
    * The current value of the market index.
    */
-  value: number;
+  currentValue: number;
   /**
-   * The change in value since the last update (absolute value).
+   * The value of the market index at the start of the specified period (24h ago/previous trading day or start of year).
    */
-  change: number;
+  previousValue: number;
 }
 
 const API_KEY = process.env.NEXT_PUBLIC_FINANCIAL_MODELING_PREP_API_KEY;
 
-// Mapping display names to FMP API symbols
 const MARKET_SYMBOL_MAP: { [key: string]: string } = {
-  'S&P 500': '%5EGSPC', // URL encoded ^GSPC
-  'NASDAQ': '%5EIXIC', // URL encoded ^IXIC (NASDAQ Composite)
-  'FTSE 100': '%5EFTSE', // URL encoded ^FTSE
-  'DAX': '%5EGDAXI', // URL encoded ^GDAXI (DAX Performance Index)
-  'CAC 40': '%5EFCHI', // URL encoded ^FCHI
-  'Nikkei 225': '%5EN225', // URL encoded ^N225
-  'Hang Seng': '%5EHSI', // URL encoded ^HSI
-  'Shanghai Composite': '000001.SS', // SSE Composite Index on FMP (already URL safe)
-  'Nifty 50': '%5ENSEI', // URL encoded ^NSEI (NIFTY 50 on FMP)
-  'STI': '%5ESTI', // URL encoded ^STI (Straits Times Index on FMP)
+  'S&P 500': '%5EGSPC',
+  'NASDAQ': '%5EIXIC',
+  'FTSE 100': '%5EFTSE',
+  'DAX': '%5EGDAXI',
+  'CAC 40': '%5EFCHI',
+  'Nikkei 225': '%5EN225',
+  'Hang Seng': '%5EHSI',
+  'Shanghai Composite': '000001.SS',
+  'Nifty 50': '%5ENSEI',
+  'STI': '%5ESTI',
 };
 
+const formatDateForFMP = (date: Date) => format(date, 'yyyy-MM-dd');
+
 /**
- * Asynchronously retrieves market data for a given market.
+ * Asynchronously retrieves market data for a given market and period.
  *
  * @param market The name of the market to retrieve data for.
- * @returns A promise that resolves to a MarketData object containing market information.
+ * @param period The period for which to fetch the previous value ('24h' or 'ytd').
+ * @returns A promise that resolves to a MarketPeriodData object.
  */
-export async function getMarketData(market: string): Promise<MarketData> {
+export async function getMarketData(market: string, period: '24h' | 'ytd'): Promise<MarketPeriodData> {
   if (!API_KEY || API_KEY === 'YOUR_FMP_API_KEY_HERE') {
-    console.warn('FinancialModelingPrep API key is not configured. Returning mock data for markets.');
-    // Fallback to mock data or throw an error if API key is missing
-    return { name: market, value: Math.random() * 10000, change: (Math.random() - 0.5) * 200 };
+    console.warn(`FinancialModelingPrep API key is not configured. Returning mock data for market ${market} (${period}).`);
+    const currentValue = Math.random() * 10000 + 1000;
+    let previousValue;
+    if (period === '24h') {
+      previousValue = currentValue * (1 + (Math.random() - 0.5) * 0.1); // +/- 5%
+    } else { // ytd
+      previousValue = currentValue * (1 + (Math.random() - 0.5) * 0.5); // +/- 25%
+    }
+    return {
+      name: market,
+      currentValue: parseFloat(currentValue.toFixed(2)),
+      previousValue: parseFloat(previousValue.toFixed(2)),
+    };
   }
 
   const apiSymbol = MARKET_SYMBOL_MAP[market] || market;
-  const url = `https://financialmodelingprep.com/api/v3/quote/${apiSymbol}?apikey=${API_KEY}`;
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error(`FMP API error for market ${market} (${apiSymbol}): ${response.status}`, errorData);
-      throw new Error(`Failed to fetch market data for ${market}: ${response.statusText}`);
+    // Fetch current quote (includes current price and previous day's close)
+    const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${apiSymbol}?apikey=${API_KEY}`;
+    const quoteResponse = await fetch(quoteUrl);
+    if (!quoteResponse.ok) {
+      const errorData = await quoteResponse.json().catch(() => ({}));
+      console.error(`FMP API error for current quote of ${market} (${apiSymbol}): ${quoteResponse.status}`, errorData);
+      throw new Error(`Failed to fetch current market data for ${market}: ${quoteResponse.statusText}`);
     }
-    const dataArray = await response.json();
+    const quoteDataArray = await quoteResponse.json();
+    if (!Array.isArray(quoteDataArray) || quoteDataArray.length === 0) {
+      throw new Error(`No current quote data returned for market ${market}`);
+    }
+    const marketInfo = quoteDataArray[0];
+    const currentValue = marketInfo.price;
 
-    if (!Array.isArray(dataArray) || dataArray.length === 0) {
-      console.error(`Unexpected data format or empty response from FMP for ${market} (${apiSymbol}):`, dataArray);
-      throw new Error(`No data returned for market ${market}`);
+    if (typeof currentValue !== 'number') {
+      throw new Error(`Invalid current value data type for market ${market}`);
     }
 
-    const marketInfo = dataArray[0];
+    let previousValue: number;
 
-    if (typeof marketInfo.price !== 'number' || typeof marketInfo.change !== 'number') {
-        console.error(`Unexpected data structure in FMP response for ${market} (${apiSymbol}):`, marketInfo);
-        throw new Error(`Invalid data structure for market ${market}`);
+    if (period === '24h') {
+      // FMP's `previousClose` is a good proxy for 24h ago price for markets
+      previousValue = marketInfo.previousClose;
+      if (typeof previousValue !== 'number') {
+        console.warn(`Previous close not available for ${market}, using current value as fallback for 24h period.`);
+        previousValue = currentValue; // Fallback if previousClose is not available
+      }
+    } else { // YTD
+      const today = new Date();
+      const startDateOfYear = formatDateForFMP(startOfYear(today));
+      // Fetch historical data for the start of the year
+      // To be safe, fetch a small range around start of year in case Jan 1 was a holiday
+      const startDateRangeBegin = formatDateForFMP(startOfYear(today));
+      const startDateRangeEnd = formatDateForFMP(subDays(startOfYear(today),-5)); // Jan 1 to Jan 6
+      
+      const historicalUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${apiSymbol}?from=${startDateRangeBegin}&to=${startDateRangeEnd}&apikey=${API_KEY}`;
+      const historicalResponse = await fetch(historicalUrl);
+      if (!historicalResponse.ok) {
+        const errorData = await historicalResponse.json().catch(() => ({}));
+        console.error(`FMP API error for YTD historical data of ${market} (${apiSymbol}): ${historicalResponse.status}`, errorData);
+        // Fallback: use current value if YTD historical fetch fails
+        console.warn(`Failed to fetch YTD historical data for ${market}. Using current value as previous value.`);
+        previousValue = currentValue;
+      } else {
+        const historicalData = await historicalResponse.json();
+        if (historicalData.historical && historicalData.historical.length > 0) {
+          // FMP historical data is typically sorted descending by date if multiple dates returned. We want the earliest.
+          // Or, if specific date like 'YYYY-01-01' given and it was a trading day, it should be the one.
+          // For a range, find the entry closest to Jan 1st, typically the last in the array if sorted ascending, or first if descending.
+          // FMP historical-price-full returns data sorted ascending by date. So take first element.
+          previousValue = historicalData.historical[0].close;
+        } else {
+           console.warn(`No YTD historical data found for ${market} around ${startDateRangeBegin}. Using current value as previous value.`);
+          previousValue = currentValue; // Fallback if no historical data
+        }
+      }
+       if (typeof previousValue !== 'number') {
+        console.warn(`Invalid YTD previous value for ${market}, using current value as fallback.`);
+        previousValue = currentValue;
+      }
     }
-    
+
     return {
-      name: marketInfo.name || market, // Use API name if available, else fallback to input market name
-      value: marketInfo.price,
-      change: marketInfo.change,
+      name: marketInfo.name || market,
+      currentValue: currentValue,
+      previousValue: previousValue,
     };
+
   } catch (error) {
-    console.error(`Error fetching market data for ${market} (${apiSymbol}):`, error);
+    console.error(`Error in getMarketData for ${market} (${apiSymbol}, ${period}):`, error);
     throw error;
   }
 }

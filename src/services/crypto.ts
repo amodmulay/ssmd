@@ -1,7 +1,10 @@
+
+import { format } from 'date-fns';
+
 /**
- * Represents crypto market data.
+ * Represents crypto market data for a specific period.
  */
-export interface CryptoData {
+export interface CryptoPeriodData {
   /**
    * The symbol of the cryptocurrency.
    */
@@ -9,11 +12,11 @@ export interface CryptoData {
   /**
    * The current price of the cryptocurrency.
    */
-  price: number;
+  currentPrice: number;
   /**
-   * The price change in the last 24 hours (absolute value).
+   * The price of the cryptocurrency at the start of the specified period (24h ago or start of year).
    */
-  priceChange24h: number;
+  previousPrice: number;
 }
 
 const SYMBOL_TO_ID_MAP: { [key: string]: string } = {
@@ -21,60 +24,107 @@ const SYMBOL_TO_ID_MAP: { [key: string]: string } = {
   ETH: 'ethereum',
 };
 
+const getYesterdayDateDDMMYYYY = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return format(date, 'dd-MM-yyyy');
+};
+
+const getStartOfYearDateDDMMYYYY = () => {
+  const date = new Date();
+  return `01-01-${format(date, 'yyyy')}`;
+};
+
 /**
- * Asynchronously retrieves crypto market data for a given symbol.
+ * Asynchronously retrieves crypto market data for a given symbol and period.
  *
  * @param symbol The symbol of the cryptocurrency to retrieve data for (e.g., BTC, ETH).
- * @returns A promise that resolves to a CryptoData object containing market information.
+ * @param period The period for which to fetch the previous price ('24h' or 'ytd').
+ * @returns A promise that resolves to a CryptoPeriodData object.
  */
-export async function getCryptoData(symbol: string): Promise<CryptoData> {
+export async function getCryptoData(symbol: string, period: '24h' | 'ytd'): Promise<CryptoPeriodData> {
   const coinId = SYMBOL_TO_ID_MAP[symbol.toUpperCase()];
   if (!coinId) {
     console.error(`Unsupported crypto symbol: ${symbol}`);
     throw new Error(`Unsupported crypto symbol: ${symbol}`);
   }
 
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${symbol}` }));
-      console.error(`CoinGecko API error for ${symbol}: ${response.status} ${response.statusText}`, errorData);
-      throw new Error(`Failed to fetch crypto data for ${symbol}: ${response.statusText}`);
+  // Mock data logic
+  if (!process.env.NEXT_PUBLIC_COINGECKO_API_KEY && process.env.NEXT_PUBLIC_FINANCIAL_MODELING_PREP_API_KEY === 'YOUR_FMP_API_KEY_HERE') {
+     console.warn(`CoinGecko API key not available and FMP key is placeholder. Returning mock data for crypto ${symbol} (${period}).`);
+    const currentPrice = Math.random() * 50000 + 1000;
+    let previousPrice;
+    if (period === '24h') {
+      previousPrice = currentPrice * (1 + (Math.random() - 0.5) * 0.1); // +/- 5%
+    } else { // ytd
+      previousPrice = currentPrice * (1 + (Math.random() - 0.5) * 0.5); // +/- 25%
     }
-    const data = await response.json();
-
-    if (!data[coinId] || data[coinId].usd === undefined || data[coinId].usd_24h_change === undefined) {
-      console.error(`Unexpected data format from CoinGecko for ${symbol}:`, data);
-      throw new Error(`Unexpected data format for ${symbol}`);
-    }
-
-    const rawPrice = data[coinId].usd;
-    const rawPriceChange24hPercent = data[coinId].usd_24h_change;
-
-    if (typeof rawPrice !== 'number' || typeof rawPriceChange24hPercent !== 'number') {
-      console.error(`Invalid data types from CoinGecko for ${symbol}: price is ${typeof rawPrice}, 24h_change is ${typeof rawPriceChange24hPercent}. Data:`, data[coinId]);
-      throw new Error(`Invalid data types received for ${symbol} from API.`);
-    }
-    
-    const price = rawPrice;
-    const priceChange24hPercent = rawPriceChange24hPercent;
-    // Calculate absolute change: currentPrice * (percentageChange / 100)
-    const priceChange24hAbsolute = price * (priceChange24hPercent / 100);
-    
     return {
       symbol: symbol.toUpperCase(),
-      price: price,
-      priceChange24h: priceChange24hAbsolute,
+      currentPrice: parseFloat(currentPrice.toFixed(2)),
+      previousPrice: parseFloat(previousPrice.toFixed(2)),
     };
-  } catch (error) {
-    // Log the error if it's not one we've already constructed with a clear message
-    if (!(error instanceof Error && error.message.startsWith('Failed to fetch crypto data') || error.message.startsWith('Unexpected data format') || error.message.startsWith('Invalid data types received'))) {
-      console.error(`Generic error fetching crypto data for ${symbol}:`, error);
+  }
+
+
+  try {
+    // Fetch current price
+    const currentPriceUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
+    const currentPriceResponse = await fetch(currentPriceUrl);
+    if (!currentPriceResponse.ok) {
+      const errorData = await currentPriceResponse.json().catch(() => ({}));
+      console.error(`CoinGecko API error for current price of ${symbol}: ${currentPriceResponse.status}`, errorData);
+      throw new Error(`Failed to fetch current crypto price for ${symbol}: ${currentPriceResponse.statusText}`);
     }
-    // Re-throw or return a specific error structure if components need to handle it differently
-    throw error; 
+    const currentPriceData = await currentPriceResponse.json();
+    const currentPrice = currentPriceData[coinId]?.usd;
+
+    if (typeof currentPrice !== 'number') {
+      console.error(`Unexpected current price data format from CoinGecko for ${symbol}:`, currentPriceData);
+      throw new Error(`Unexpected current price data format for ${symbol}`);
+    }
+
+    // Fetch historical price for the start of the period
+    const dateForHistory = period === '24h' ? getYesterdayDateDDMMYYYY() : getStartOfYearDateDDMMYYYY();
+    const historicalPriceUrl = `https://api.coingecko.com/api/v3/coins/${coinId}/history?date=${dateForHistory}&localization=false`;
+    
+    const historicalPriceResponse = await fetch(historicalPriceUrl);
+    if (!historicalPriceResponse.ok) {
+      // If YTD fails for a new coin, it might not have history for Jan 1st.
+      // Or if 24h fails (e.g. new listing today), use current price as previous to show 0 change.
+      if (historicalPriceResponse.status === 404 || historicalPriceResponse.status === 400) { // 400 can be for bad date (e.g. future)
+        console.warn(`Historical data not found for ${symbol} on ${dateForHistory}. Using current price as previous price.`);
+         return {
+          symbol: symbol.toUpperCase(),
+          currentPrice: currentPrice,
+          previousPrice: currentPrice, // Assume no change if history is missing
+        };
+      }
+      const errorData = await historicalPriceResponse.json().catch(() => ({}));
+      console.error(`CoinGecko API error for historical price of ${symbol} on ${dateForHistory}: ${historicalPriceResponse.status}`, errorData);
+      throw new Error(`Failed to fetch historical crypto price for ${symbol}: ${historicalPriceResponse.statusText}`);
+    }
+    const historicalPriceData = await historicalPriceResponse.json();
+    const previousPrice = historicalPriceData?.market_data?.current_price?.usd;
+
+    if (typeof previousPrice !== 'number') {
+       // If historical data is present but no USD price (e.g. coin listed after date, or API error)
+      console.warn(`Historical USD price not found for ${symbol} on ${dateForHistory}. Data:`, historicalPriceData, `Using current price as previous price.`);
+      return {
+        symbol: symbol.toUpperCase(),
+        currentPrice: currentPrice,
+        previousPrice: currentPrice, // Assume no change
+      };
+    }
+
+    return {
+      symbol: symbol.toUpperCase(),
+      currentPrice: currentPrice,
+      previousPrice: previousPrice,
+    };
+
+  } catch (error) {
+    console.error(`Error in getCryptoData for ${symbol} (${period}):`, error);
+    throw error;
   }
 }
-
