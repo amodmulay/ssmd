@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Download, BarChartHorizontalBig, List, CalendarClock, Clock } from 'lucide-react';
+import { Download, CalendarClock, Clock } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
@@ -14,7 +14,6 @@ import { getMarketData, type MarketPeriodData } from '@/services/market';
 import { getBondRateData, type BondRatePeriodData } from '@/services/bond-rate';
 import { useInterval } from '@/hooks/use-interval';
 import { useToast } from "@/hooks/use-toast";
-import ConsolidatedDataGraph from './consolidated-data-graph';
 
 export interface ProcessedConsolidatedDataItem {
   id: string;
@@ -47,13 +46,11 @@ interface ConsolidatedDataFeedCardProps {
   onError?: () => void;
 }
 
-type ViewMode = 'cards' | 'graph';
 type DataPeriod = '24h' | 'ytd';
 
 const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onError }) => {
   const [data, setData] = useState<ProcessedConsolidatedDataItem[]>(initialItems.map(item => ({ ...item, data: null })));
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [dataPeriod, setDataPeriod] = useState<DataPeriod>('24h');
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -147,45 +144,30 @@ const ConsolidatedDataFeedCard: React.FC<ConsolidatedDataFeedCardProps> = ({ onE
               />
               <CalendarClock className={`h-4 w-4 ${dataPeriod === 'ytd' ? 'text-primary' : 'text-muted-foreground'}`} />
             </div>
-            <div className="flex items-center space-x-1">
-              <List className={`h-5 w-5 ${viewMode === 'cards' ? 'text-primary' : 'text-muted-foreground'}`} />
-               <Label htmlFor="view-mode-toggle" className="text-xs text-muted-foreground sr-only">View Mode</Label>
-              <Switch
-                id="view-mode-toggle"
-                checked={viewMode === 'graph'}
-                onCheckedChange={(checked) => setViewMode(checked ? 'graph' : 'cards')}
-                aria-label="Toggle view mode between cards and graph"
-              />
-              <BarChartHorizontalBig className={`h-5 w-5 ${viewMode === 'graph' ? 'text-primary' : 'text-muted-foreground'}`} />
-            </div>
           </div>
         }
       >
-        {viewMode === 'cards' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {data.map((item) => {
-              if (item.error || !item.data) {
-                return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
-              }
-              const change = item.data.current - item.data.previous;
-              return (
-                <MarketDataItem
-                  key={item.id}
-                  label={item.label}
-                  value={item.data.current}
-                  change={change}
-                  previousValueForPercentage={item.data.previous}
-                  valuePrefix={item.valuePrefix}
-                  valueSuffix={item.valueSuffix}
-                  isLoading={isLoading && !item.data}
-                  periodLabel={dataPeriod === 'ytd' ? 'YTD' : '24h'}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <ConsolidatedDataGraph data={data} isLoading={isLoading && !isAnyDataAvailable} dataPeriod={dataPeriod} />
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {data.map((item) => {
+            if (item.error || !item.data) {
+              return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
+            }
+            const change = item.data.current - item.data.previous;
+            return (
+              <MarketDataItem
+                key={item.id}
+                label={item.label}
+                value={item.data.current}
+                change={change}
+                previousValueForPercentage={item.data.previous}
+                valuePrefix={item.valuePrefix}
+                valueSuffix={item.valueSuffix}
+                isLoading={isLoading && !item.data}
+                periodLabel={dataPeriod === 'ytd' ? 'YTD' : '24h'}
+              />
+            );
+          })}
+        </div>
       </MarketCardShell>
       <div className="mt-4 flex justify-end">
         <Button onClick={handleScreenshot} variant="outline">
