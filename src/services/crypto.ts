@@ -1,4 +1,3 @@
-
 // src/services/crypto.ts
 export interface CryptoData {
   id: string; // Original passed symbol, e.g., "bitcoin"
@@ -13,7 +12,6 @@ export interface CryptoData {
 
 const API_BASE_URL = 'https://api.binance.com/api/v3';
 // Binance public endpoints for ticker data generally do not require an API key but are rate-limited.
-// For higher rate limits, an API key can be used, but this example will use public access.
 
 const symbolMap: { [key: string]: { binanceSymbol: string, displayName: string, baseAsset: string } } = {
   'bitcoin': { binanceSymbol: 'BTCUSDT', displayName: 'Bitcoin', baseAsset: 'btc' },
@@ -62,7 +60,7 @@ function getMockData(passedSymbol: string, period: '24h' | 'ytd', cacheKey: stri
   const mockData = generateMockCryptoData(mappedInfo, passedSymbol);
   if (period === 'ytd' && mockData.price_change_percentage_ytd_in_currency === undefined) {
      // If YTD is specifically requested and not available, use 24h as fallback for display consistency
-     mockData.price_change_percentage_24h = mockData.price_change_percentage_ytd_in_currency ?? mockData.price_change_percentage_24h;
+     mockData.price_change_percentage_ytd_in_currency = mockData.price_change_percentage_ytd_in_currency ?? mockData.price_change_percentage_24h;
   }
 
   responseCache.set(cacheKey, { data: mockData, timestamp: Date.now() });
@@ -91,12 +89,12 @@ export async function getCryptoData(passedSymbol: string, period: '24h' | 'ytd' 
   const url = `${API_BASE_URL}/ticker/24hr?symbol=${mappedInfo.binanceSymbol}`;
   
   try {
-    console.log(`Fetching crypto data for ${mappedInfo.binanceSymbol} (mapped from ${passedSymbol}) from Binance API`);
+    console.log(`Fetching crypto data for ${mappedInfo.binanceSymbol} (mapped from ${passedSymbol}) from Binance API: ${url}`);
     const response = await fetch(url);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${mappedInfo.binanceSymbol}` }));
-      console.warn(`Binance API error for ${mappedInfo.binanceSymbol}: ${response.status} ${response.statusText}`, errorData, "Using mock data as fallback.");
+      console.warn(`Binance API error for ${mappedInfo.binanceSymbol}: ${response.status} ${response.statusText}. Response: ${JSON.stringify(errorData)}. Using mock data as fallback.`);
       return getMockData(passedSymbol, period, cacheKey);
     }
     
@@ -106,16 +104,15 @@ export async function getCryptoData(passedSymbol: string, period: '24h' | 'ytd' 
       const currentPrice = parseFloat(data.lastPrice);
       const priceChangePercent24h = parseFloat(data.priceChangePercent);
       // Binance 24hr ticker doesn't provide YTD directly. We'll use 24h for YTD if period is 'ytd'.
-      // Or, for a more accurate YTD, historical data would be needed, which is a larger change.
-      const ytdChange = priceChangePercent24h; // Fallback YTD to 24h change
+      const ytdChange = priceChangePercent24h; 
 
       const processedData: CryptoData = {
-        id: passedSymbol, // Use the original passed symbol (e.g., "bitcoin")
-        symbol: mappedInfo.baseAsset, // e.g., "btc"
-        name: mappedInfo.displayName, // e.g., "Bitcoin"
+        id: passedSymbol, 
+        symbol: mappedInfo.baseAsset, 
+        name: mappedInfo.displayName, 
         current_price: currentPrice,
         price_change_percentage_24h: priceChangePercent24h,
-        price_change_percentage_ytd_in_currency: period === 'ytd' ? ytdChange : priceChangePercent24h, // Use 24h as YTD placeholder
+        price_change_percentage_ytd_in_currency: period === 'ytd' ? ytdChange : priceChangePercent24h,
         total_volume: data.quoteVolume ? parseFloat(data.quoteVolume) : undefined,
         last_updated: new Date(data.closeTime || Date.now()).toISOString(),
       };
@@ -125,7 +122,13 @@ export async function getCryptoData(passedSymbol: string, period: '24h' | 'ytd' 
     console.warn(`No data or unexpected format from Binance API for ${mappedInfo.binanceSymbol}. Using mock data as fallback.`);
     return getMockData(passedSymbol, period, cacheKey);
   } catch (error) {
-    console.error(`Network or parsing error fetching crypto data for ${mappedInfo.binanceSymbol} from Binance:`, error, "Using mock data as fallback.");
+    let message = `Network or parsing error fetching crypto data for ${mappedInfo.binanceSymbol} from Binance. Using mock data as fallback.`;
+    if (error instanceof Error) {
+        message += ` Details: ${error.message}`;
+    } else {
+        message += ` Details: ${String(error)}`;
+    }
+    console.warn(message); // Changed from console.error
     return getMockData(passedSymbol, period, cacheKey);
   }
 }
