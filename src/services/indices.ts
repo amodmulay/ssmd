@@ -18,7 +18,7 @@ export interface IndexData {
   ytdChangePercentage?: number;
 }
 
-const FMP_API_KEY = process.env.NEXT_PUBLIC_FINANCIAL_MODELING_PREP_API_KEY;
+const FMP_DEMO_API_KEY = "demo"; // Use FMP's demo key for free, limited access
 const API_BASE_URL = 'https://financialmodelingprep.com/api/v3';
 
 const MOCK_INDEX_DATA: IndexData[] = [
@@ -32,7 +32,31 @@ const MOCK_INDEX_DATA: IndexData[] = [
 ];
 
 const responseCache = new Map<string, { data: IndexData, timestamp: number }>();
-const CACHE_DURATION = FMP_API_KEY ? 60 * 1000 : 5 * 60 * 1000; // 1 min for real API, 5 min for mock
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes cache for API and mock data
+
+function getMockIndexData(symbol: string, period: '24h' | 'ytd', cacheKey: string): IndexData | null {
+  console.warn(`Using mock index data for ${symbol} (${period}).`);
+  const baseMockData = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
+  if (baseMockData) {
+    const priceFluctuation = (Math.random() * (baseMockData.price * 0.01)) - (baseMockData.price * 0.005); // +/- 0.5%
+    const changeFluctuation = Math.random() * 0.5 - 0.25; // +/- 0.25%
+
+    const ytdChange = (baseMockData.ytdChangePercentage ?? baseMockData.changesPercentage) + changeFluctuation;
+    const dailyChange = baseMockData.changesPercentage + changeFluctuation;
+    
+    const dataToReturn: IndexData = {
+      ...baseMockData,
+      name: baseMockData.name || symbol,
+      price: parseFloat((baseMockData.price + priceFluctuation).toFixed(2)),
+      changesPercentage: period === 'ytd' ? ytdChange : dailyChange,
+      ytdChangePercentage: ytdChange, // Always provide a YTD value from mock
+      timestamp: Date.now(),
+    };
+    responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
+    return dataToReturn;
+  }
+  return null;
+}
 
 export async function getIndexData(symbol: string, period: '24h' | 'ytd' = '24h'): Promise<IndexData | null> {
   const cacheKey = `${symbol}-${period}`;
@@ -42,29 +66,16 @@ export async function getIndexData(symbol: string, period: '24h' | 'ytd' = '24h'
     return cachedEntry.data;
   }
 
-  if (!FMP_API_KEY) {
-    console.warn("FINANCIAL_MODELING_PREP_API_KEY not found. Using mock index data for:", symbol);
-    const mockData = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
-    if (mockData) {
-      const dataToReturn = {
-        ...mockData,
-        changesPercentage: period === 'ytd' ? (mockData.ytdChangePercentage ?? mockData.changesPercentage) : mockData.changesPercentage,
-      };
-      responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
-      return dataToReturn;
-    }
-    return null;
-  }
-
-  const quoteUrl = `${API_BASE_URL}/quote/${symbol.toUpperCase()}?apikey=${FMP_API_KEY}`;
+  const quoteUrl = `${API_BASE_URL}/quote/${symbol.toUpperCase()}?apikey=${FMP_DEMO_API_KEY}`;
 
   if (period === 'ytd') {
     const today = new Date();
     const yearStart = `${today.getFullYear()}-01-01`;
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const historicalUrl = `${API_BASE_URL}/historical-price-full/${symbol.toUpperCase()}?from=${yearStart}&to=${todayStr}&apikey=${FMP_API_KEY}`;
+    const historicalUrl = `${API_BASE_URL}/historical-price-full/${symbol.toUpperCase()}?from=${yearStart}&to=${todayStr}&apikey=${FMP_DEMO_API_KEY}`;
 
     try {
+      console.log(`Fetching YTD index data for ${symbol} using demo key.`);
       const [quoteResponse, historicalResponse] = await Promise.all([
         fetch(quoteUrl),
         fetch(historicalUrl)
@@ -72,81 +83,64 @@ export async function getIndexData(symbol: string, period: '24h' | 'ytd' = '24h'
 
       if (!quoteResponse.ok) {
         const errorData = await quoteResponse.json().catch(() => ({}));
-        console.error(`FMP API error for ${symbol} (quote): ${quoteResponse.status} ${quoteResponse.statusText}`, errorData);
-        const mockOnError = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
-        if (mockOnError) {
-          console.warn(`Falling back to mock YTD data for ${symbol} due to API quote error.`);
-          responseCache.set(cacheKey, { data: {...mockOnError, changesPercentage: mockOnError.ytdChangePercentage ?? mockOnError.changesPercentage }, timestamp: Date.now() });
-          return {...mockOnError, changesPercentage: mockOnError.ytdChangePercentage ?? mockOnError.changesPercentage };
-        }
-        return null;
+        console.warn(`FMP API error for ${symbol} (YTD quote with demo key): ${quoteResponse.status} ${quoteResponse.statusText}`, errorData, "Using mock YTD data as fallback.");
+        return getMockIndexData(symbol, period, cacheKey);
       }
       const quoteDataArr: IndexData[] = await quoteResponse.json();
-      if (!quoteDataArr || quoteDataArr.length === 0) return null;
+      if (!quoteDataArr || quoteDataArr.length === 0 || typeof quoteDataArr[0].price !== 'number') {
+          console.warn(`No valid YTD quote data from FMP API for ${symbol} with demo key. Using mock YTD data.`);
+          return getMockIndexData(symbol, period, cacheKey);
+      }
       const currentQuote = quoteDataArr[0];
 
-      let ytdChangePercentage = currentQuote.changesPercentage; // Default to 24h if YTD calculation fails
+      let ytdChangePercentage = currentQuote.changesPercentage; 
 
       if (historicalResponse.ok) {
         const historicalData = await historicalResponse.json();
         if (historicalData.historical && historicalData.historical.length > 0) {
-          const startOfYearPrice = historicalData.historical[historicalData.historical.length - 1].close; // Last entry is oldest
-          if (startOfYearPrice && currentQuote.price) {
+          const startOfYearPrice = historicalData.historical[historicalData.historical.length - 1].close;
+          if (typeof startOfYearPrice === 'number' && typeof currentQuote.price === 'number') {
             ytdChangePercentage = ((currentQuote.price - startOfYearPrice) / startOfYearPrice) * 100;
+          } else {
+            console.warn(`Could not calculate YTD change for ${symbol} from historical data (missing/invalid prices). Using 24h change or quote's change.`);
           }
         } else {
-          console.warn(`No historical data for YTD calculation for ${symbol}. Using 24h change.`);
+          console.warn(`No historical data for YTD calculation for ${symbol} with demo key. Using 24h change or quote's change.`);
         }
       } else {
-         console.warn(`Failed to fetch historical data for YTD calculation for ${symbol}: ${historicalResponse.status}. Using 24h change.`);
+         console.warn(`Failed to fetch historical data for YTD calculation for ${symbol} (demo key: ${historicalResponse.statusText}). Using 24h change or quote's change.`);
       }
       
-      const indexResult: IndexData = { ...currentQuote, changesPercentage: ytdChangePercentage, ytdChangePercentage };
+      const indexResult: IndexData = { ...currentQuote, name: currentQuote.name || symbol, changesPercentage: ytdChangePercentage, ytdChangePercentage: ytdChangePercentage };
       responseCache.set(cacheKey, { data: indexResult, timestamp: Date.now() });
       return indexResult;
 
     } catch (error) {
-      console.error(`Network or parsing error fetching YTD index data for ${symbol}:`, error);
-      const mockOnError = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
-      if (mockOnError) {
-        console.warn(`Falling back to mock YTD data for ${symbol} due to network/parsing error.`);
-        responseCache.set(cacheKey, { data: {...mockOnError, changesPercentage: mockOnError.ytdChangePercentage ?? mockOnError.changesPercentage }, timestamp: Date.now() });
-        return {...mockOnError, changesPercentage: mockOnError.ytdChangePercentage ?? mockOnError.changesPercentage };
-      }
-      return null;
+      console.error(`Network or parsing error fetching YTD index data for ${symbol} with demo key:`, error, "Using mock YTD data as fallback.");
+      return getMockIndexData(symbol, period, cacheKey);
     }
   } else { // period is '24h'
     try {
+      console.log(`Fetching 24h index data for ${symbol} using demo key.`);
       const response = await fetch(quoteUrl);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error(`FMP API error for ${symbol} (24h): ${response.status} ${response.statusText}`, errorData);
-        const mockOnError = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
-        if (mockOnError) {
-           console.warn(`Falling back to mock 24h data for ${symbol} due to API error.`);
-           const dataToReturn = {...mockOnError, changesPercentage: mockOnError.changesPercentage};
-           responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
-           return dataToReturn;
-        }
-        return null;
+        console.warn(`FMP API error for ${symbol} (24h with demo key): ${response.status} ${response.statusText}`, errorData, "Using mock 24h data as fallback.");
+        return getMockIndexData(symbol, period, cacheKey);
       }
       const data: IndexData[] = await response.json();
-      if (data && data.length > 0) {
-        const resultData = {...data[0], ytdChangePercentage: data[0].changesPercentage} // temp ytd for non-ytd calls
+      if (data && data.length > 0 && typeof data[0].price === 'number') {
+        // For 24h period, ytdChangePercentage can be the same as changesPercentage if the API provides a YTD field, or calculated if we had a start of year price.
+        // For simplicity with demo key, we'll pass what the quote gives. The mock will have a distinct YTD.
+        const resultData = {...data[0], name: data[0].name || symbol, ytdChangePercentage: data[0].ytdChangePercentage ?? data[0].changesPercentage };
         responseCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         return resultData;
       }
-      return null;
+      console.warn(`No valid 24h data from FMP API for ${symbol} with demo key. Using mock 24h data.`);
+      return getMockIndexData(symbol, period, cacheKey);
     } catch (error) {
-      console.error(`Network or parsing error fetching 24h index data for ${symbol}:`, error);
-      const mockOnError = MOCK_INDEX_DATA.find(f => f.symbol.toUpperCase() === symbol.toUpperCase());
-      if (mockOnError) {
-           console.warn(`Falling back to mock 24h data for ${symbol} due to network/parsing error.`);
-           const dataToReturn = {...mockOnError, changesPercentage: mockOnError.changesPercentage};
-           responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
-           return dataToReturn;
-      }
-      return null;
+      console.error(`Network or parsing error fetching 24h index data for ${symbol} with demo key:`, error, "Using mock 24h data as fallback.");
+      return getMockIndexData(symbol, period, cacheKey);
     }
   }
 }
