@@ -1,3 +1,4 @@
+
 // src/services/crypto.ts
 import type { cache } from 'react';
 
@@ -18,7 +19,8 @@ export interface CryptoData {
   last_updated: string;
 }
 
-const API_BASE_URL = 'https://api.coingecko.com/api/v3'; // Always use public API
+const API_BASE_URL = 'https://api.coingecko.com/api/v3'; 
+const COINGECKO_API_KEY = process.env.NEXT_PUBLIC_COINGECKO_API_KEY; // Get key from .env
 
 const MOCK_CRYPTO_DATA: CryptoData[] = [
   { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png?1696501400', current_price: 60000, market_cap: 1200000000000, market_cap_rank: 1, total_volume: 50000000000, price_change_percentage_24h: 1.5, price_change_percentage_ytd_in_currency: 50.0, last_updated: new Date().toISOString() },
@@ -31,13 +33,13 @@ const MOCK_CRYPTO_DATA: CryptoData[] = [
 
 // In-memory cache for API responses
 const responseCache = new Map<string, { data: CryptoData | null, timestamp: number }>();
-const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes cache for API and mock data
+const CACHE_DURATION_WITH_KEY = 60 * 1000; // 1 minute with API key
+const CACHE_DURATION_DEMO = 15 * 60 * 1000; // 15 minutes for demo/mock
 
 function getMockCryptoData(symbol: string, period: '24h' | 'ytd', cacheKey: string): CryptoData | null {
   console.warn(`Using mock crypto data for ${symbol} (${period}).`);
   const baseMockData = MOCK_CRYPTO_DATA.find(c => c.id.toLowerCase() === symbol.toLowerCase() || c.symbol.toLowerCase() === symbol.toLowerCase());
   if (baseMockData) {
-    // Simulate some data fluctuation for mock
     const priceFluctuation = (Math.random() * (baseMockData.current_price * 0.02)) - (baseMockData.current_price * 0.01); // +/- 1%
     const changeFluctuation = Math.random() * 1 - 0.5; // +/- 0.5%
 
@@ -54,30 +56,37 @@ function getMockCryptoData(symbol: string, period: '24h' | 'ytd', cacheKey: stri
     responseCache.set(cacheKey, { data: dataToReturn, timestamp: Date.now() });
     return dataToReturn;
   }
-  // Do not cache null here, let getCryptoData handle caching null if mock data is not found after an API failure.
   return null;
 }
 
-export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h'): Promise<CryptoData | null> {
-  const cacheKey = `${symbol}-${period}`;
+export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h', forceMock: boolean = false): Promise<CryptoData | null> {
+  const cacheKey = `${symbol}-${period}-${forceMock ? 'mock' : (COINGECKO_API_KEY ? 'live' : 'demo')}`;
   const cachedEntry = responseCache.get(cacheKey);
+  const currentCacheDuration = forceMock ? CACHE_DURATION_DEMO : (COINGECKO_API_KEY ? CACHE_DURATION_WITH_KEY : CACHE_DURATION_DEMO);
 
-  if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_DURATION)) {
-    return cachedEntry.data; // This can be CryptoData or null
+
+  if (cachedEntry && (Date.now() - cachedEntry.timestamp < currentCacheDuration)) {
+    return cachedEntry.data;
+  }
+
+  if (forceMock || !COINGECKO_API_KEY) {
+    // Use mock data if forced or if API key is not available
+    return getMockCryptoData(symbol, period, cacheKey);
   }
 
   const priceChangePercentages = '24h,7d,14d,30d,60d,200d,1y';
-  const url = `${API_BASE_URL}/coins/markets?vs_currency=usd&ids=${symbol}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=${priceChangePercentages}`;
+  const url = `${API_BASE_URL}/coins/markets?vs_currency=usd&ids=${symbol}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=${priceChangePercentages}&x_cg_demo_api_key=${COINGECKO_API_KEY}`;
   
   try {
-    console.log(`Fetching crypto data for ${symbol} from ${url}`);
+    console.log(`Fetching crypto data for ${symbol} from CoinGecko Pro API`);
     const response = await fetch(url);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: `Failed to parse error response for ${symbol}` }));
       console.warn(`CoinGecko API error for ${symbol}: ${response.status} ${response.statusText}`, errorData, "Using mock data as fallback.");
-      const mockResult = getMockCryptoData(symbol, period, cacheKey);
-      if (mockResult === null) { // If mock also fails (symbol not in mock or other mock issue)
-          responseCache.set(cacheKey, { data: null, timestamp: Date.now() }); // Cache the null failure
+      const mockResult = getMockCryptoData(symbol, period, cacheKey); // Use a different cache key for this fallback if needed or ensure it's handled.
+      if (mockResult === null) {
+          responseCache.set(cacheKey, { data: null, timestamp: Date.now() }); 
       }
       return mockResult;
     }
@@ -86,14 +95,16 @@ export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h
       const coinData = data[0];
       const processedData = {
         ...coinData,
-        price_change_percentage_24h: coinData.price_change_percentage_24h,
-         // price_change_percentage_ytd_in_currency will be used by component if present
+        // Ensure price_change_percentage_24h is always present
+        price_change_percentage_24h: coinData.price_change_percentage_24h !== undefined && coinData.price_change_percentage_24h !== null 
+                                      ? coinData.price_change_percentage_24h 
+                                      : 0, // Default to 0 if undefined or null
+        // price_change_percentage_ytd_in_currency will be used by component if present
       };
       responseCache.set(cacheKey, { data: processedData, timestamp: Date.now() });
       return processedData;
     }
     console.warn(`No data from CoinGecko API for ${symbol}. Using mock data as fallback.`);
-    // If API returns empty array or invalid data
     const mockResultOnApiEmpty = getMockCryptoData(symbol, period, cacheKey);
     if (mockResultOnApiEmpty === null) {
         responseCache.set(cacheKey, { data: null, timestamp: Date.now() });
@@ -108,4 +119,3 @@ export async function getCryptoData(symbol: string, period: '24h' | 'ytd' = '24h
     return mockResultOnCatch;
   }
 }
-

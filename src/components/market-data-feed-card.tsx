@@ -10,18 +10,20 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getIndexData, type IndexData } from '@/services/indices'; // Changed from forex to indices
+import { getIndexData, type IndexData } from '@/services/indices'; 
 import { ArrowUpRight, ArrowDownRight, Minus, AlertCircle, Coins, Landmark, AreaChart, Globe, Euro, TrendingUp, Sunrise } from 'lucide-react';
+import type { DataSourceType } from '@/lib/utils';
 
 interface MarketDataFeedCardProps {
   title: string;
   iconName: string; 
-  marketType: 'crypto' | 'index'; // Changed from forex to index
+  marketType: 'crypto' | 'index'; 
   symbols: string[];
   showYTD: boolean;
+  dataSource: DataSourceType; // Added dataSource prop
 }
 
-type CombinedData = CryptoData | IndexData; // Updated CombinedData
+type CombinedData = CryptoData | IndexData; 
 
 // Dynamically import Lucide icons
 const iconComponents: { [key: string]: LucideIcon } = {
@@ -37,7 +39,7 @@ const iconComponents: { [key: string]: LucideIcon } = {
 };
 
 
-const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, showYTD }) => {
+const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, showYTD, dataSource }) => {
   const [data, setData] = useState<CombinedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,12 +54,13 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
       try {
         let fetchedData: CombinedData[] = [];
         const currentPeriod = showYTD ? 'ytd' : '24h';
+        const forceMock = dataSource === 'yahoo';
 
         if (marketType === 'crypto') {
-          const cryptoPromises = symbols.map(symbol => getCryptoData(symbol, currentPeriod));
+          const cryptoPromises = symbols.map(symbol => getCryptoData(symbol, currentPeriod, forceMock));
           fetchedData = (await Promise.all(cryptoPromises)).filter(d => d !== null) as CryptoData[];
-        } else if (marketType === 'index') { // Changed from forex to index
-          const indexPromises = symbols.map(symbol => getIndexData(symbol, currentPeriod)); // Use getIndexData
+        } else if (marketType === 'index') { 
+          const indexPromises = symbols.map(symbol => getIndexData(symbol, currentPeriod, forceMock)); 
           fetchedData = (await Promise.all(indexPromises)).filter(d => d !== null) as IndexData[];
         }
         setData(fetchedData);
@@ -72,10 +75,10 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
     fetchData();
     const intervalId = setInterval(fetchData, 60000); 
     return () => clearInterval(intervalId);
-  }, [marketType, symbolsKey, showYTD, symbols]); 
+  }, [marketType, symbolsKey, showYTD, symbols, dataSource]); 
 
-  const renderPriceChange = (priceChange: number | undefined) => {
-    if (priceChange === undefined || priceChange === null) { // Handle null as well
+  const renderPriceChange = (priceChange: number | undefined | null) => { // Allow null
+    if (priceChange === undefined || priceChange === null) { 
       return <span className="text-muted-foreground">N/A</span>;
     }
     const isPositive = priceChange > 0;
@@ -139,9 +142,9 @@ const MarketDataFeedCard: FC<MarketDataFeedCardProps> = ({ title, iconName, mark
             <TableBody>
               {data.map((item) => {
                 // Common properties
-                const name = item.name || ('symbol' in item ? item.symbol : 'Unknown'); // Ensure name exists
+                const name = item.name || ('symbol' in item ? item.symbol : 'Unknown'); 
                 let currentPrice: number | undefined;
-                let priceChange: number | undefined;
+                let priceChange: number | undefined | null; // Allow null
 
                 if (marketType === 'crypto' && 'current_price' in item) {
                   currentPrice = item.current_price;

@@ -1,31 +1,39 @@
 
 "use client";
 import type { FC } from 'react';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, AreaChart } from 'lucide-react'; // Replaced Landmark with AreaChart
+import { TrendingUp, TrendingDown, Minus, AlertCircle, DollarSign, Coins, AreaChart, Camera } from 'lucide-react'; 
 import { getCryptoData, type CryptoData } from '@/services/crypto';
-import { getIndexData, type IndexData } from '@/services/indices'; // Changed from forex to indices
+import { getIndexData, type IndexData } from '@/services/indices'; 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import type { DataSourceType } from '@/lib/utils';
+
 
 interface ConsolidatedDataFeedCardProps {
   title: string;
   cryptoSymbols: string[];
-  indexSymbols: string[]; // Changed from forexSymbols to indexSymbols
+  indexSymbols: string[]; 
   showYTD: boolean;
+  dataSource: DataSourceType; // Added dataSource prop
 }
 
-type CombinedData = CryptoData | IndexData; // Updated CombinedData
+type CombinedData = CryptoData | IndexData; 
 
-const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, indexSymbols, showYTD }) => {
+const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cryptoSymbols, indexSymbols, showYTD, dataSource }) => {
   const [data, setData] = useState<CombinedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const cryptoSymbolsKey = useMemo(() => cryptoSymbols.join(','), [cryptoSymbols]);
-  const indexSymbolsKey = useMemo(() => indexSymbols.join(','), [indexSymbols]); // Changed from forexSymbolsKey
+  const indexSymbolsKey = useMemo(() => indexSymbols.join(','), [indexSymbols]); 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -33,17 +41,25 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
       setError(null);
       try {
         const currentPeriod = showYTD ? 'ytd' : '24h';
-        const cryptoPromises = cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod));
-        const indexPromises = indexSymbols.map(symbol => getIndexData(symbol, currentPeriod)); // Use getIndexData
+        
+        // Conditionally fetch based on dataSource
+        const cryptoPromises = dataSource === 'api' 
+          ? cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod))
+          : cryptoSymbols.map(symbol => getCryptoData(symbol, currentPeriod, true)); // force mock for 'yahoo'
 
-        const [cryptoResults, indexResults] = await Promise.all([ // Changed from forexResults
+        const indexPromises = dataSource === 'api'
+          ? indexSymbols.map(symbol => getIndexData(symbol, currentPeriod))
+          : indexSymbols.map(symbol => getIndexData(symbol, currentPeriod, true)); // force mock for 'yahoo'
+        
+
+        const [cryptoResults, indexResults] = await Promise.all([ 
           Promise.all(cryptoPromises),
-          Promise.all(indexPromises) // Changed from forexPromises
+          Promise.all(indexPromises) 
         ]);
 
         const fetchedData = [
           ...cryptoResults.filter(d => d !== null) as CryptoData[],
-          ...indexResults.filter(d => d !== null) as IndexData[] // Changed from ForexData
+          ...indexResults.filter(d => d !== null) as IndexData[] 
         ];
         
         setData(fetchedData);
@@ -58,15 +74,15 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
     fetchData();
     const intervalId = setInterval(fetchData, 60000); 
     return () => clearInterval(intervalId);
-  }, [cryptoSymbolsKey, indexSymbolsKey, showYTD, cryptoSymbols, indexSymbols]);
+  }, [cryptoSymbolsKey, indexSymbolsKey, showYTD, cryptoSymbols, indexSymbols, dataSource]);
 
 
   const overallSentiment = useMemo(() => {
     if (data.length === 0) return 'neutral';
     const changes = data.map(item => {
-        if ('current_price' in item) { // CryptoData
+        if ('current_price' in item) { 
             return showYTD ? (item.price_change_percentage_ytd_in_currency ?? item.price_change_percentage_24h) : item.price_change_percentage_24h;
-        } else { // IndexData
+        } else { 
             return showYTD ? (item.ytdChangePercentage ?? item.changesPercentage) : item.changesPercentage;
         }
     }).filter(change => typeof change === 'number') as number[];
@@ -81,8 +97,39 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
   const SentimentIcon = overallSentiment === 'positive' ? TrendingUp : overallSentiment === 'negative' ? TrendingDown : Minus;
   const sentimentColor = overallSentiment === 'positive' ? 'text-green-500' : overallSentiment === 'negative' ? 'text-red-500' : 'text-muted-foreground';
 
+  const handleScreenshot = async () => {
+    if (cardRef.current) {
+      try {
+        const canvas = await html2canvas(cardRef.current, {
+          useCORS: true,
+          backgroundColor: null, // Capture actual background
+          logging: false,
+          scale: 2, // Increase scale for better resolution
+        });
+        const image = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = image;
+        link.download = 'market-overview-screenshot.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({
+          title: 'Screenshot Captured!',
+          description: 'The market overview has been downloaded.',
+        });
+      } catch (err) {
+        console.error('Error capturing screenshot:', err);
+        toast({
+          variant: 'destructive',
+          title: 'Screenshot Failed',
+          description: 'Could not capture the market overview. Please try again.',
+        });
+      }
+    }
+  };
+
   return (
-    <Card className="shadow-xl hover:shadow-2xl transition-shadow duration-300 bg-card">
+    <Card ref={cardRef} className="shadow-xl hover:shadow-2xl transition-shadow duration-300 bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xl font-bold text-primary flex items-center">
           <DollarSign className="h-7 w-7 mr-3 text-accent" />
@@ -91,6 +138,9 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
         <div className="flex items-center space-x-2">
           <Badge variant={showYTD ? "secondary" : "outline"} className="text-sm">{showYTD ? 'YTD' : '24h'}</Badge>
           <SentimentIcon className={`h-7 w-7 ${sentimentColor}`} />
+          <Button variant="outline" size="sm" onClick={handleScreenshot} className="p-1.5" title="Capture Screenshot">
+            <Camera className="h-4 w-4" />
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -132,13 +182,13 @@ const ConsolidatedDataFeedCard: FC<ConsolidatedDataFeedCardProps> = ({ title, cr
                                     ? (showYTD ? ((item as CryptoData).price_change_percentage_ytd_in_currency ?? (item as CryptoData).price_change_percentage_24h) : (item as CryptoData).price_change_percentage_24h)
                                     : (showYTD ? ((item as IndexData).ytdChangePercentage ?? (item as IndexData).changesPercentage) : (item as IndexData).changesPercentage);
 
-              const ItemIcon = isCrypto ? Coins : AreaChart; // Use AreaChart for indices
+              const ItemIcon = isCrypto ? Coins : AreaChart; 
               const changeColor = typeof priceChange === 'number' && priceChange > 0 ? 'text-green-500' : typeof priceChange === 'number' && priceChange < 0 ? 'text-red-500' : 'text-muted-foreground';
 
               const formattedPrice = currentPrice !== undefined
                 ? `$${currentPrice.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
-                    maximumFractionDigits: isCrypto ? 8 : 2, // Indices typically have 2 decimal places
+                    maximumFractionDigits: isCrypto ? 8 : 2, 
                   })}`
                 : 'N/A';
 
