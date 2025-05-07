@@ -2,7 +2,7 @@
 "use client";
 
 import type React from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ChartConfig } from '@/components/ui/chart';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { CryptoData } from '@/services/crypto';
@@ -106,7 +106,7 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
 
   return (
     <ChartContainer config={chartConfig} className="min-h-[300px] w-full aspect-video">
-      <BarChart accessibilityLayer data={processedChartData} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+      <LineChart accessibilityLayer data={processedChartData} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
         <CartesianGrid vertical={false} />
         <XAxis
           dataKey="name"
@@ -136,12 +136,12 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
         <Tooltip
             content={({ active, payload }) => {
             if (active && payload && payload.length) {
-              const data = payload[0].payload as ChartDataPoint;
+              const dataPoint = payload[0].payload as ChartDataPoint;
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-sm">
                   <div className="grid grid-cols-1 gap-1.5">
-                    <span className="font-semibold">{data.name}</span>
-                    <span className="text-sm text-muted-foreground">{data.tooltipValue}</span>
+                    <span className="font-semibold">{dataPoint.name}</span>
+                    <span className="text-sm text-muted-foreground">{dataPoint.tooltipValue}</span>
                   </div>
                 </div>
               );
@@ -150,23 +150,28 @@ const ConsolidatedDataGraph: React.FC<ConsolidatedDataGraphProps> = ({ data, isL
           }}
         />
         <Legend />
-        <Bar
+        <Line
+          type="monotone"
           dataKey="percentChange"
-          fill="var(--color-percentChange)"
-          radius={4}
+          stroke="var(--color-percentChange)"
+          strokeWidth={2}
+          dot={false}
           yAxisId="left"
           name="% Change (24h)"
         />
-        <Bar
+        <Line
+          type="monotone"
           dataKey="currentRate"
-          fill="var(--color-currentRate)"
-          radius={4}
+          stroke="var(--color-currentRate)"
+          strokeWidth={2}
+          dot={false}
           yAxisId="right"
           name="Current Rate (%)"
         />
-      </BarChart>
+      </LineChart>
     </ChartContainer>
   );
 };
 
 export default ConsolidatedDataGraph;
+
