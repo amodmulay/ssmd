@@ -1,6 +1,7 @@
 
 import MarketDataFeedCard from '@/components/market-data-feed-card';
 import ConsolidatedDataFeedCard from '@/components/consolidated-data-feed-card';
+import OnlineAdsCard from '@/components/online-ads-card';
 
 export default function Home() {
   const cryptoSymbols = ['BTC', 'ETH'];
@@ -16,6 +17,10 @@ export default function Home() {
       </header>
 
       <main className="space-y-8">
+        <ConsolidatedDataFeedCard />
+        
+        <OnlineAdsCard />
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           <MarketDataFeedCard
             title="Crypto Markets"
@@ -46,8 +51,6 @@ export default function Home() {
             className="shadow-lg rounded-lg"
           />
         </div>
-        
-        <ConsolidatedDataFeedCard />
       </main>
 
       <footer className="mt-12 pt-8 border-t border-border text-center text-muted-foreground">
@@ -56,4 +59,3 @@ export default function Home() {
     </div>
   );
 }
-

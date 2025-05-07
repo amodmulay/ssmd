@@ -95,8 +95,8 @@ const ConsolidatedDataFeedCard: React.FC = () => {
   };
 
   return (
-    <div ref={cardRef}>
-      <MarketCardShell title="Consolidated View" iconName="BarChart3" isLoading={isLoading && !data.some(d=>d.data)} contentClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    <div ref={cardRef} className="shadow-lg rounded-lg">
+      <MarketCardShell title="Overview" iconName="BarChart3" isLoading={isLoading && !data.some(d=>d.data)} contentClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {data.map((item) => {
           if (item.error || !item.data) {
             return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;
