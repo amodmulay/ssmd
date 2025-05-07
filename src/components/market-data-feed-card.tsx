@@ -1,7 +1,7 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
 import { getCryptoData, type CryptoData } from '@/services/crypto';
@@ -12,7 +12,7 @@ type MarketType = 'crypto' | 'us' | 'eu' | 'asia';
 
 interface MarketDataFeedCardProps {
   title: string;
-  icon?: LucideIcon;
+  iconName?: string; // Changed from icon?: LucideIcon
   marketType: MarketType;
   symbols: string[]; // e.g., ['BTC', 'ETH'] or ['S&P 500', 'NASDAQ']
   className?: string;
@@ -20,7 +20,7 @@ interface MarketDataFeedCardProps {
 
 type FetchedData = CryptoData | MarketData;
 
-const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, icon, marketType, symbols, className }) => {
+const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, iconName, marketType, symbols, className }) => {
   const [data, setData] = useState<(FetchedData & { id: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,7 +53,7 @@ const MarketDataFeedCard: React.FC<MarketDataFeedCardProps> = ({ title, icon, ma
   useInterval(fetchData, 30000); // Update every 30 seconds
 
   return (
-    <MarketCardShell title={title} icon={icon} isLoading={isLoading && data.length === 0} className={className} contentClassName="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <MarketCardShell title={title} iconName={iconName} isLoading={isLoading && data.length === 0} className={className} contentClassName="grid grid-cols-1 md:grid-cols-2 gap-4">
       {isLoading && data.length === 0 ? (
         // Skeleton handled by MarketCardShell if data is empty and loading
         // If data exists but is refreshing, MarketDataItems will show their own skeletons

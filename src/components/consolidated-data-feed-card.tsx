@@ -1,7 +1,8 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Landmark, Coins, Percent, Building2, BarChart3, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import MarketCardShell from './market-card-shell';
 import MarketDataItem from './market-data-item';
@@ -95,7 +96,7 @@ const ConsolidatedDataFeedCard: React.FC = () => {
 
   return (
     <div ref={cardRef}>
-      <MarketCardShell title="Consolidated View" icon={BarChart3} isLoading={isLoading && !data.some(d=>d.data)} contentClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <MarketCardShell title="Consolidated View" iconName="BarChart3" isLoading={isLoading && !data.some(d=>d.data)} contentClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {data.map((item) => {
           if (item.error || !item.data) {
             return <MarketDataItem key={item.id} label={item.label} value={item.error ? "Error" : "N/A"} isLoading={isLoading && !item.data} />;

@@ -1,4 +1,4 @@
-import { Coins, Landmark, Globe, Building2 } from 'lucide-react';
+
 import MarketDataFeedCard from '@/components/market-data-feed-card';
 import ConsolidatedDataFeedCard from '@/components/consolidated-data-feed-card';
 
@@ -19,28 +19,28 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           <MarketDataFeedCard
             title="Crypto Markets"
-            icon={Coins}
+            iconName="Coins"
             marketType="crypto"
             symbols={cryptoSymbols}
             className="shadow-lg rounded-lg"
           />
           <MarketDataFeedCard
             title="US Markets"
-            icon={Landmark}
+            iconName="Landmark"
             marketType="us"
             symbols={usMarketSymbols}
             className="shadow-lg rounded-lg"
           />
           <MarketDataFeedCard
             title="EU Markets"
-            icon={Globe}
+            iconName="Globe"
             marketType="eu"
             symbols={euMarketSymbols}
             className="shadow-lg rounded-lg"
           />
           <MarketDataFeedCard
             title="Asia Markets"
-            icon={Building2}
+            iconName="Building2"
             marketType="asia"
             symbols={asiaMarketSymbols}
             className="shadow-lg rounded-lg"
