@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
       <header className="mb-8">
-        <h1 className="text-4xl font-bold text-primary tracking-tight">MarketWatch Lite</h1>
+        <h1 className="text-4xl font-bold text-primary tracking-tight">ssmd: Super simple market dashboard</h1>
         <p className="text-lg text-muted-foreground">Your simplified market data dashboard.</p>
       </header>
 
@@ -51,8 +51,9 @@ export default function Home() {
       </main>
 
       <footer className="mt-12 pt-8 border-t border-border text-center text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} MarketWatch Lite. Data is for informational purposes only.</p>
+        <p>&copy; {new Date().getFullYear()} ssmd. Data is for informational purposes only.</p>
       </footer>
     </div>
   );
 }
+
