@@ -1,5 +1,3 @@
-# Firebase Studio
+# ssmd
 
-This is a NextJS starter in Firebase Studio.
-
-To get started, take a look at src/app/page.tsx.
+This is a NextJS starter displaying the lates market data
